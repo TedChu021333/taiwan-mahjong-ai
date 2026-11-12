@@ -5,7 +5,7 @@
 
 > 研究用途說明：本專題是學習強化學習與電腦視覺的個人研究。與真人對戰的牌桌只使用「提示模式」
 > （AI 建議、人自己點）；自動點擊只在對手全是電腦的訓練場做過實驗，程式沒有任何規避偵測的設計。
-> 自動操作可能違反遊戲服務條款，請勿用於真人對局。遊戲畫面素材與模型權重不包含在本 repo 中。
+> 自動操作可能違反遊戲服務條款，請勿用於真人對局。遊戲畫面素材不包含在本 repo 中。
 
 ## 成果摘要
 
@@ -123,8 +123,8 @@ flowchart LR
 | 3 | 自己 vs 三家 AI，打一圈 | 不用 |
 | 4 | 四家 AI 互打、手牌全開（觀戰） | 不用 |
 
-選項 3、4 需要模型權重 `models/rl3_0960.pt`（不在 repo 中，見下方「訓練」）；沒有權重時可用
-`.venv-train\Scripts\python -m play --bot rule` 和規則式 AI 對打。
+訓練好的模型 `models/rl3_0960.pt`（約 8.6MB）已包含在 repo 中，下載後就能直接和 AI 對打；
+想和規則式 AI 對打可用 `.venv-train\Scripts\python -m play --bot rule`。
 
 ### 2. 準備遊戲（提示模式、自動模式才需要）
 1. 安裝 [Google Play Games 電腦版](https://play.google.com/googleplaygames)（Google 官方的 Android 遊戲模擬器）。
@@ -162,9 +162,11 @@ python -m eval.arena --variant nn:models/rl.pt --baseline rule --games 2000 --wo
 python -m pytest tests
 ```
 
-以上指令都在 `.venv-train\Scripts\` 的 python 下執行。模型權重（`models/`）與畫面模板（`train/`）不在 repo 中；
-沒有模板時，`play/` 的牌桌會改用文字畫牌面。剛下載的 repo 跑測試是 399 個通過、49 個略過
+以上指令都在 `.venv-train\Scripts\` 的 python 下執行。畫面模板（`train/`）不在 repo 中；沒有模板時，`play/` 的牌桌會改用文字畫牌面。剛下載的 repo 跑測試是 399 個通過、49 個略過
 （略過的是需要 `train/` 遊戲截圖的辨識測試）。`launcher.pyw` 是總選單的按鈕版，可以做成桌面捷徑。
 
 ## 作者
 朱泰翰．國立臺灣科技大學 資訊工程系
+
+## 授權
+程式碼以 [MIT License](LICENSE) 釋出。「明星三缺一」的遊戲名稱、畫面與素材屬於其著作權人，不在本授權範圍內。

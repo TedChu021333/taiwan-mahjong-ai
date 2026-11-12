@@ -6,7 +6,8 @@ __pycache__/
 hint/overlay_position.txt
 result/
 .venv-train/
-models/
+models/*
+!models/rl3_0960.pt
 training/data/
 result_*/
 hint/meld_position_*.txt
