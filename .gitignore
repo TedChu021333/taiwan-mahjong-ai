@@ -12,3 +12,5 @@ bigtwo_train/
 bigtwo/overlay_position.txt
 bigtwo/counter_position.txt
 result_*/
+hint/meld_position_*.txt
+hint/danger_position.txt

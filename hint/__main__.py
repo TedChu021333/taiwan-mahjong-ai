@@ -199,6 +199,8 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
     """最近一次建議的吃碰：(吃碰後應有的手牌, 不能打的牌, 用掉的手牌)。"""
     missed_for = None
     """已經存過「胡按鈕亮著卻沒選胡」截圖的畫面。"""
+    win_unlit_for = None
+    win_unlit_shots_left = WIN_UNLIT_SHOT_LIMIT
     last_claim = None
     """(最近讀到的放大牌, 時間)。"""
     decided_for = decided_action = decided_note = None
@@ -584,7 +586,14 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
             else:
                 retries = 0
             if not actuator.perform(action, observation):
-                log(f"[{stamp}] 畫面上找不到對應的按鈕或牌，略過", hand_text(observation))
+                if action.kind == ActionType.WIN and observation.hand != win_unlit_for \
+                        and win_unlit_shots_left > 0:
+                    win_unlit_for = observation.hand
+                    win_unlit_shots_left -= 1
+                    log(f"[{stamp}] 要胡但找不到「胡」按鈕，截圖存到 {save_result(frame, '胡不到_')}",
+                        hand_text(observation))
+                else:
+                    log(f"[{stamp}] 畫面上找不到對應的按鈕或牌，略過", hand_text(observation))
             acted_for = observation
             acted_at = clock()
             if observation.my_turn:
@@ -765,6 +774,9 @@ def network_options(network) -> str:
             f"，護欄{'開' if getattr(network, 'guard', False) else '關'}")
 
 
+WIN_UNLIT_SHOT_LIMIT = 20
+"""AI 要胡、畫面上卻找不到亮著的「胡」時存 `胡不到_` 截圖（同一手牌一張，每次執行最多這麼多張）：
+明槓補牌自摸（槓上開花）兩次只讀到「聽」亮著，遊戲說錯過胡牌（10/20 09:54、11/2 11:37），當下沒截圖查不出原因。"""
 GOLD_MISSING_SHOT_LIMIT = 20
 """讀不到金牌的截圖每次執行最多存幾張（每局最多一張）。"""
 GOLD_MISSING_FRAMES = 20

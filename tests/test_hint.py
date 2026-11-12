@@ -117,6 +117,37 @@ def test_loop_remembers_claim_and_forbids_tiles_on_the_next_discard(monkeypatch)
     assert not seen[2].claimed  # 手牌對不上就不是剛碰完
 
 
+def test_loop_saves_a_screenshot_when_it_wants_to_win_but_the_win_button_is_not_lit(monkeypatch):
+    import hint.__main__ as hint_main
+    from game.rules import Action
+
+    # 11/2 11:37 明槓補牌自摸：只讀到「聽」亮著，點不到「胡」
+    hand = T("234p666p77s55z7s")
+    screen = Observation(hand, frozenset({"declare"}), None, ())
+    monkeypatch.setattr(hint_main, "decide", lambda observation: Action(ActionType.WIN))
+
+    class NoWinButton:
+        def follow_up(self, observation):
+            return False
+
+        def perform(self, action, observation):
+            return False
+
+    now = [0.0]
+
+    def frames():
+        for step in range(6):
+            now[0] = step * 1.0
+            yield str(step), screen
+
+    saved, lines = [], []
+    hint_main.run(frames(), readers=None, actuator=NoWinButton(), observe_fn=lambda frame, readers: frame,
+                  clock=lambda: now[0], save_result=lambda frame, prefix="": saved.append(prefix) or "x",
+                  log=lambda line, detail=None, echo=True: lines.append(line))
+    assert saved == ["胡不到_"]  # 同一手牌只存一張
+    assert any("找不到「胡」按鈕" in line for line in lines)
+
+
 def test_claimed_observation_never_suggests_a_forbidden_tile():
     # 用 67s 吃 5s 後手上剩 5s、89s：平常打孤張五條就聽牌，但吃完不能打 5s、8s
     hand = T("111m222m333m44p5s89s")
