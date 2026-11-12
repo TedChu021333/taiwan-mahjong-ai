@@ -33,8 +33,8 @@ AMOUNT_X = (1300, 1800)
 NAME_BOX = (500, 138, 780, 230)
 """名字所在範圍（相對於列頂，含上下位移的餘裕）。"""
 MY_NAME = Path(__file__).with_name("my_name.png")
-"""自己名字的截圖：eval/my_name.png（10/20 以前的名字）、my_name_2.png（10/20 改名後）……
-任何一個比對得上就是自己那列（load_names 讀進所有 my_name*.png）。"""
+"""自己遊戲名字的截圖：eval/my_name*.png（改名後再存一張，例如 my_name_2.png），任何一個比對得上就是自己那列
+（load_names 讀進所有 my_name*.png）。帳號資訊不進版控，要自己從結算畫面裁一張。"""
 
 
 def load_names(first: Path = MY_NAME) -> list[np.ndarray]:

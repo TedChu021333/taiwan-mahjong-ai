@@ -8,9 +8,8 @@ result/
 .venv-train/
 models/
 training/data/
-bigtwo_train/
-bigtwo/overlay_position.txt
-bigtwo/counter_position.txt
 result_*/
 hint/meld_position_*.txt
 hint/danger_position.txt
+eval/my_name*.png
+CLAUDE.md

@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "總選單（麻將、大老二全部功能）",
+      "label": "總選單（麻將全部功能）",
       "type": "process",
       "command": "${workspaceFolder}/.venv-train/Scripts/python.exe",
       "args": ["start.py"],

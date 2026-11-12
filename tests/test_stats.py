@@ -78,8 +78,8 @@ def test_rake_rounds_down_like_the_game():
 ])
 def test_real_settlement_screens(name, amounts, me):
     path = TRAIN_DIR / f"{name}.png"
-    if not path.exists():
-        pytest.skip("缺少訓練截圖")
+    if not path.exists() or not MY_NAME.exists():
+        pytest.skip("缺少訓練截圖或名字圖")
     image = read_image(path)
     my_name = cv2.cvtColor(read_image(MY_NAME), cv2.COLOR_BGR2GRAY)
     rows = [read_row(image, top, load_digits(), my_name) for top in ROW_TOPS]
@@ -91,8 +91,8 @@ def test_real_settlement_screens(name, amounts, me):
 def test_my_row_by_seat_wind_when_the_name_is_covered():
     # 10/2 13:08：「完成遊戲(小結算)」提示條蓋住名字；自己坐東（第一列）被自摸 -500
     path = TRAIN_DIR / "經典_結算提示條.png"
-    if not path.exists():
-        pytest.skip("缺少訓練截圖")
+    if not path.exists() or not MY_NAME.exists():
+        pytest.skip("缺少訓練截圖或名字圖")
     image = read_image(path)
     my_name = cv2.cvtColor(read_image(MY_NAME), cv2.COLOR_BGR2GRAY)
     rows = [read_row(image, top, load_digits(), my_name) for top in ROW_TOPS]
