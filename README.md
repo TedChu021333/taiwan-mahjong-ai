@@ -130,9 +130,18 @@ flowchart LR
 1. 安裝 [Google Play Games 電腦版](https://play.google.com/googleplaygames)（Google 官方的 Android 遊戲模擬器）。
 2. 在裡面搜尋並安裝「**明星3缺1**」。
 3. 螢幕解析度設 **1920×1080**，遊戲開**全螢幕**，進入「**經典版**」綠色桌面的牌桌（一圈）。
-4. 第一次使用要先建立畫面模板：截幾張自己的牌局畫面，用
-   `python -m perception.extract_templates <截圖> <由左到右的手牌>` 產生 34 種牌的模板（存在 `train/`）。
-5. 提示模式：`.venv-train\Scripts\python -m hint --ai nn`，畫面上會出現浮動小視窗顯示建議。
+4. 畫面辨識要用的參考圖都放在 `train/`，因為是遊戲畫面的截圖，**不包含在本 repo 中**，要用自己的遊戲截圖建立：
+
+   | 資料夾／檔案 | 用途 | 建立方式 |
+   |---|---|---|
+   | `train/templates/` | 34 種手牌 | `python -m perception.extract_templates <截圖> <由左到右的手牌>` |
+   | `train/buttons/` | 繼續、結算等按鈕；對手「聽」標記、連莊數字 | 按鈕用 `python -m perception.continue_button <截圖> <名稱>`；標記與數字從截圖手動裁切 |
+   | `train/river_templates/` | 牌河的牌 | `python -m perception.river_reader <截圖> --label ...`，實戰中也會自動收集 |
+   | `train/settlement_templates/`、`train/meld_templates/` | 結算手牌、對手副露 | 實戰中自動收集 |
+   | `eval/my_name.png` | 結算畫面上自己的名字（戰績統計用） | 從結算截圖裁出自己名字那塊 |
+
+5. 提示模式：`.venv-train\Scripts\python -m hint --ai nn`，畫面上會出現浮動小視窗顯示建議（可拖曳、右鍵關閉）。
+   按 **Esc** 打完這圈再停、再按一次立刻停；自動模式中把滑鼠甩到螢幕**左上角**會立即中止。
 
 ### 3. 其他指令（進階）
 
@@ -141,10 +150,10 @@ flowchart LR
 python -m play --model models/rl3_0960.pt
 python -m play --model models/rl3_0960.pt --watch
 
-# 訓練：老師資料 → 模仿學習 → PPO
-python -m training.teacher_data --games 60000 --workers 2
-python -m training.supervised --out models/sl_rule.pt
-python -m training.selfplay --init models/sl_rule.pt --out models/rl.pt --actors 8
+# 訓練：老師資料 → 模仿學習 → PPO（需要 NVIDIA 顯示卡；作者用 RTX 5060）
+python -m training.teacher_data --games 60000 --workers 2      # 約 1 小時
+python -m training.supervised --out models/sl_rule.pt         # 約 10 分鐘
+python -m training.selfplay --init models/sl_rule.pt --out models/rl.pt --actors 8 --hours 10
 
 # 兩種策略配對比較
 python -m eval.arena --variant nn:models/rl.pt --baseline rule --games 2000 --workers 4
@@ -154,7 +163,8 @@ python -m pytest tests
 ```
 
 以上指令都在 `.venv-train\Scripts\` 的 python 下執行。模型權重（`models/`）與畫面模板（`train/`）不在 repo 中；
-沒有模板時，`play/` 的牌桌會改用文字畫牌面。
+沒有模板時，`play/` 的牌桌會改用文字畫牌面。剛下載的 repo 跑測試是 399 個通過、49 個略過
+（略過的是需要 `train/` 遊戲截圖的辨識測試）。`launcher.pyw` 是總選單的按鈕版，可以做成桌面捷徑。
 
 ## 作者
 朱泰翰．國立臺灣科技大學 資訊工程系
