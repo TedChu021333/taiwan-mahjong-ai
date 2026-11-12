@@ -1,7 +1,7 @@
 # 台灣 16 張麻將 AI
 
 從零打造的台灣 16 張麻將 AI：自己寫規則引擎與模擬器，用模仿學習加強化學習（PPO 自我對打）訓練出策略網路，
-再用電腦視覺即時讀取遊戲畫面，在手機遊戲「明星三缺一」的經典版牌桌上給出打牌建議。
+再用電腦視覺即時讀取遊戲畫面，在手機遊戲「明星三缺一」（電腦上用 Google Play Games 執行）的經典版牌桌上給出打牌建議。
 
 > 研究用途說明：本專題是學習強化學習與電腦視覺的個人研究。與真人對戰的牌桌只使用「提示模式」
 > （AI 建議、人自己點）；自動點擊只在對手全是電腦的訓練場做過實驗，程式沒有任何規避偵測的設計。
@@ -110,18 +110,31 @@ flowchart LR
 
 ## 安裝與執行
 
-環境：Windows、Python 3.12，強化學習需要 NVIDIA 顯示卡。
+### 1. 安裝程式（Windows）
+1. 安裝 [Python 3.12](https://www.python.org/downloads/)，安裝畫面記得勾選 **Add python.exe to PATH**。
+2. 下載這個 repo（綠色 **Code** 按鈕 → **Download ZIP**，解壓縮）。
+3. 雙擊 **`install.bat`**：自動建立虛擬環境、安裝所有套件（有 NVIDIA 顯示卡會裝 GPU 版 PyTorch）。
+4. 雙擊 **`start.bat`** 開啟總選單：
 
-```bash
-python -m venv .venv-train
-.venv-train\Scripts\pip install torch --index-url https://download.pytorch.org/whl/cu128
-.venv-train\Scripts\pip install -r requirements.txt
+| 選項 | 功能 | 需要遊戲 |
+|---|---|---|
+| 1 | 麻將自動模式（只在對手全是電腦的訓練場使用） | 要 |
+| 2 | 今天的戰績（讀結算截圖） | 要 |
+| 3 | 自己 vs 三家 AI，打一圈 | 不用 |
+| 4 | 四家 AI 互打、手牌全開（觀戰） | 不用 |
 
-.venv-train\Scripts\python -m pytest tests     # 測試
-.venv-train\Scripts\python start.py            # 總選單
-```
+選項 3、4 需要模型權重 `models/rl3_0960.pt`（不在 repo 中，見下方「訓練」）；沒有權重時可用
+`.venv-train\Scripts\python -m play --bot rule` 和規則式 AI 對打。
 
-不需要遊戲也能跑的功能：
+### 2. 準備遊戲（提示模式、自動模式才需要）
+1. 安裝 [Google Play Games 電腦版](https://play.google.com/googleplaygames)（Google 官方的 Android 遊戲模擬器）。
+2. 在裡面搜尋並安裝「**明星3缺1**」。
+3. 螢幕解析度設 **1920×1080**，遊戲開**全螢幕**，進入「**經典版**」綠色桌面的牌桌（一圈）。
+4. 第一次使用要先建立畫面模板：截幾張自己的牌局畫面，用
+   `python -m perception.extract_templates <截圖> <由左到右的手牌>` 產生 34 種牌的模板（存在 `train/`）。
+5. 提示模式：`.venv-train\Scripts\python -m hint --ai nn`，畫面上會出現浮動小視窗顯示建議。
+
+### 3. 其他指令（進階）
 
 ```bash
 # 自己 vs 三家 AI（--bot rule 換規則式 AI）；--watch 四家 AI 互打、手牌全開
@@ -135,10 +148,12 @@ python -m training.selfplay --init models/sl_rule.pt --out models/rl.pt --actors
 
 # 兩種策略配對比較
 python -m eval.arena --variant nn:models/rl.pt --baseline rule --games 2000 --workers 4
+
+# 測試
+python -m pytest tests
 ```
 
-模型權重（`models/`）與畫面模板（`train/`）不在 repo 中：權重可依上面流程重新訓練；
-畫面辨識需要自己的遊戲截圖產生模板（`python -m perception.extract_templates`）。
+以上指令都在 `.venv-train\Scripts\` 的 python 下執行。模型權重（`models/`）與畫面模板（`train/`）不在 repo 中；
 沒有模板時，`play/` 的牌桌會改用文字畫牌面。
 
 ## 作者
