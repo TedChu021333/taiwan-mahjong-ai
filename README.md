@@ -1,4 +1,16 @@
-# 台灣 16 張麻將 AI
+# 台灣 16 張麻將 AI：強化學習 × 電腦視覺
+
+**Taiwanese 16-tile Mahjong AI with Reinforcement Learning and Computer Vision**
+
+> **English summary.** A Taiwanese 16-tile mahjong AI built from scratch: a full rules engine and simulator,
+> a 1D residual CNN policy trained by imitation learning and then PPO self-play (~2 million games), and a
+> real-time computer-vision pipeline (template matching, perspective-corrected meld reading) that reads the
+> Taiwanese mobile mahjong game 明星三缺一 and shows move suggestions in an overlay.
+> In the simulator the RL agent beats the rule-based baseline by **+0.33 ± 0.29 tai per game** (4,000 paired games);
+> in 2,155 live games against the game's built-in bots it won **26%** of hands versus about 24% for the bots.
+> Everything is Python (PyTorch, OpenCV), with 448 pytest tests. A trained model is included, so you can play
+> against the AI or watch four AIs play each other without the game (`python -m play`).
+> Live use is for research only: hint mode with human players, auto-play only in all-bot practice rooms, no detection evasion.
 
 從零打造的台灣 16 張麻將 AI：自己寫規則引擎與模擬器，用模仿學習加強化學習（PPO 自我對打）訓練出策略網路，
 再用電腦視覺即時讀取遊戲畫面，在手機遊戲「明星三缺一」（電腦上用 Google Play Games 執行）的經典版牌桌上給出打牌建議。
