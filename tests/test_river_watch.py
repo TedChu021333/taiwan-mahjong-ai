@@ -182,6 +182,20 @@ def test_own_claim_tiles_are_exposed():
     assert watch.exposed_tiles() == ((), (), (), ())
 
 
+def test_own_claim_counts_the_tile_taken_from_the_circle():
+    """被我們吃碰的那張在放大圓框裡就被拿走、不會落進牌河（11/16 01:27 碰七萬後算成場上還剩 2 張七萬）。"""
+    reader = FakeReader()
+    watch, _ = watch_with(reader)
+    watch.own_claim((P("7m"), P("7m")), P("7m"), "right")
+    assert watch.exposed_tiles()[0] == (P("7m"), P("7m"), P("7m")) and watch.my_pungs == [P("7m")]
+    # 牌河有記到那張（下家最後一張就是它）時不重複記
+    watch.new_hand()
+    reader.current["right"] = [RiverTile(P("7m"), 0.9, (1180, 400, 1250, 466))]
+    frames(watch, waiting())
+    watch.own_claim((P("7m"), P("7m")), P("7m"), "right")
+    assert watch.exposed_tiles()[0] == (P("7m"), P("7m"))
+
+
 def watch_with_banner(reader, banners):
     """banners：每次 update 依序回傳的大字（用完後為 None）。"""
     queue = list(banners)

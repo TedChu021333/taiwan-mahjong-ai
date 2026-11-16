@@ -524,7 +524,7 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
                 expected, forbidden, used = pending_claim
                 if tuple(sorted(observation.hand)) == expected:
                     if rivers is not None and used is not None:
-                        rivers.own_claim(used)  # 每次吃碰只記一次
+                        rivers.own_claim(*used)  # 每次吃碰只記一次
                         observation = replace(observation, exposed=rivers.exposed_tiles())
                         pending_claim = (expected, forbidden, None)
                     observation = replace(observation, claimed=True, forbidden=forbidden)
@@ -540,8 +540,9 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
             if action is not None and action.kind in (ActionType.CHOW, ActionType.PUNG):
                 used = list(action.tiles)
                 used.remove(action.tile)
+                source = observation.claim.source if observation.claim is not None else None
                 pending_claim = (hand_after_claim(observation, action),
-                                 forbidden_after_claim(action, action.tile), tuple(used))
+                                 forbidden_after_claim(action, action.tile), (tuple(used), action.tile, source))
             advice = describe(action) if action is not None else None
             buttons = observation.buttons or frozenset()
             # 吃法選項框會蓋在「胡」按鈕上被誤認成亮著（10/3 20:58 誤報），選吃法時不算
@@ -633,6 +634,8 @@ def main() -> None:
                              "每手出牌時整台電腦滿載，10/3 出牌點了沒反應 34 次）")
     parser.add_argument("--move-seconds", type=float, default=3.0,
                         help="遊戲每手限時（秒）；3 秒場模擬約 1 秒，6 秒場給 6，模擬約 4 秒")
+    parser.add_argument("--record", nargs="?", type=Path, const=True, default=None, metavar="檔案",
+                        help="把畫面連同提示與放槍表錄成 mp4（預設 result/錄影_<時間>.mp4）；小視窗本身螢幕錄影錄不到")
     parser.add_argument("--demo-overlay", action="store_true",
                         help="只展示小視窗外觀（可拖曳調整位置），不辨識畫面")
     args = parser.parse_args()
@@ -664,10 +667,13 @@ def main() -> None:
     elif args.video:
         run(video_frames(args.video, args.step, args.start), Readers())
     else:
-        live(args.interval, overlay=not args.no_overlay, auto=args.auto)
+        record = args.record
+        if record is True:
+            record = RESULT_DIR / f"錄影_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        live(args.interval, overlay=not args.no_overlay, auto=args.auto, record=record)
 
 
-def live(interval: float, overlay: bool, auto: bool) -> None:
+def live(interval: float, overlay: bool, auto: bool, record: Path | None = None) -> None:
     actuator = None
     if auto:
         # 10/29 使用者：打的都是電腦場，不用每次輸入 y 確認；只留提醒
@@ -706,23 +712,51 @@ def live(interval: float, overlay: bool, auto: bool) -> None:
         from control.window import GameWindow
 
         game_window = GameWindow()  # 看不到遊戲、又沒人用電腦時把遊戲切回前面
+    recorder = None
+    if record is not None:
+        from hint.recorder import Recorder
+
+        recorder = Recorder(record)
+        recorder.start()
+        print(f"錄影中，結束後存到 {record}", flush=True)
+    try:
+        _live_loop(interval, overlay, mode, readers, actuator, find_continue, log, rivers, popups,
+                   game_window, recorder)
+    finally:
+        if recorder is not None:
+            recorder.stop()
+            print(f"錄影已存到 {record}（{recorder.seconds / 60:.1f} 分鐘），提示另存在 {recorder.subtitle_path}；"
+                  f"要把提示畫進影片：python -m hint.recorder \"{record}\" [--start 分:秒 --end 分:秒]", flush=True)
+
+
+def _live_loop(interval, overlay, mode, readers, actuator, find_continue, log, rivers, popups,
+               game_window, recorder) -> None:
+    def tee(*targets):
+        targets = [target for target in targets if target is not None]
+        return (lambda text: [target(text) for target in targets]) if targets else None
+
     if not overlay:
         print(f"{mode}啟動，按 Esc 打完這圈後結束（再按一次立刻結束），或 Ctrl+C", flush=True)
         run(screen_frames(interval), readers, actuator=actuator, find_continue=find_continue,
             log=log, rivers=rivers, find_win=win_is_lit, find_buttons=read_buttons,
             find_popup=popups.find, find_autoplay=autoplay_active, window=game_window,
-            stop_requested=esc_pressed, hand_on_screen=hand_on_screen)
+            stop_requested=esc_pressed, hand_on_screen=hand_on_screen,
+            show=tee(recorder and recorder.show), show_danger=tee(recorder and recorder.show_table),
+            show_melds=tee(recorder and recorder.show_melds))
         return
     from hint.overlay import Overlay
 
     print(f"{mode}啟動（浮動小視窗），按 Esc 打完這圈後結束（再按一次立刻結束），或 Ctrl+C", flush=True)
     window = Overlay()
     window.run(lambda: run(screen_frames(interval), readers, actuator=actuator,
-                           show=window.show, find_continue=find_continue, log=log,
+                           show=tee(window.show, recorder and recorder.show),
+                           find_continue=find_continue, log=log,
                            rivers=rivers, find_win=win_is_lit, find_buttons=read_buttons,
                            find_popup=popups.find, find_autoplay=autoplay_active,
-                           window=game_window, show_danger=window.show_table,
-                           stop_requested=esc_pressed, show_melds=window.show_melds,
+                           window=game_window,
+                           show_danger=tee(window.show_table, recorder and recorder.show_table),
+                           stop_requested=esc_pressed,
+                           show_melds=tee(window.show_melds, recorder and recorder.show_melds),
                            hand_on_screen=hand_on_screen))
 
 

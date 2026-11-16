@@ -97,13 +97,14 @@ def test_loop_remembers_claim_and_forbids_tiles_on_the_next_discard(monkeypatch)
     import agent.rule_agent
     import hint.__main__ as hint_main
 
-    monkeypatch.setattr(agent.rule_agent, "CLAIM_MODE", "loose")  # 測流程：這手照舊標準會碰
+    monkeypatch.setattr(agent.rule_agent, "CLAIM_MODE", "loose")  # 測流程：這手照舊標準會吃碰
 
-    # 影片 55.5→57.5 秒：上家打二萬，碰；碰完遊戲把最右邊的九條移到第 17 張位置
+    # 影片 55.5→57.5 秒：上家打二萬，吃一二三萬（11/16 起進張扣掉吃碰進副露的牌，碰二萬就留不住一一萬，改成吃）；
+    # 吃碰完遊戲把最右邊的九條移到第 17 張位置
     waiting = Observation(T("11223789m99m4p56779s"), frozenset({"pung", "chow"}),
                           ClaimTile(parse("2m")[0], 0.9, "left"), ())
-    after = Observation(T("113789m99m4p56779s"), None, None, ())
-    unrelated = Observation(T("113789m99m4p56789s"), None, None, ())
+    after = Observation(T("122789m99m4p56779s"), None, None, ())
+    unrelated = Observation(T("122789m99m4p56789s"), None, None, ())
     seen = []
     real_decide = hint_main.decide
     monkeypatch.setattr(hint_main, "decide",
@@ -112,7 +113,7 @@ def test_loop_remembers_claim_and_forbids_tiles_on_the_next_discard(monkeypatch)
     frames = [waiting, waiting, after, after, unrelated, unrelated]
     hint_main.run(((str(i), f) for i, f in enumerate(frames)), readers=None,
                   observe_fn=lambda frame, readers: frame, show=advice.append)
-    assert advice[0] == "碰 二萬"
+    assert advice[0] == "吃，組成 一萬二萬三萬"
     assert seen[1].claimed and seen[1].forbidden == (parse("2m")[0],)
     assert not seen[2].claimed  # 手牌對不上就不是剛碰完
 

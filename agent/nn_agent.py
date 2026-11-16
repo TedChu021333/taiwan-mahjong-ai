@@ -13,6 +13,7 @@ import torch
 from agent.rule_agent import (
     choose_rule_action_for_player,
     choose_self_kong,
+    claim_narrows,
     claim_value,
     claim_widens,
     hand_value,
@@ -104,7 +105,11 @@ class NetworkPolicy:
             self.last_note = "門清不明槓"
             return next(action for action in actions if action.kind == ActionType.PASS)
         if choice.kind in (ActionType.CHOW, ActionType.PUNG)                 and not network_claim_is_worth(state, player, choice):
-            self.last_note = "吃碰不會讓向聽變好"
+            me = state.players[player]
+            before = hand_value(me.hand, me.open_melds)
+            after = claim_value(me.hand, me.open_melds, choice, state.last_discard)
+            self.last_note = (f"吃碰完只剩 {-after[1]} 張進張（原本 {-before[1]} 張）" if claim_narrows(before, after)
+                              else "吃碰不會讓向聽變好")
             return next(action for action in actions if action.kind == ActionType.PASS)
         if choice.kind == ActionType.PASS and state.phase == Phase.RESPONSE:
             widen = widening_claim(state, player, actions)

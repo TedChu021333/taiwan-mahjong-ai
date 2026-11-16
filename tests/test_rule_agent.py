@@ -84,13 +84,13 @@ def test_rule_agent_skips_a_pung_that_does_not_help():
 
 
 def test_rule_agent_pungs_when_it_widens_the_hand(monkeypatch):
-    # 經典_碰.png：一向聽碰二萬向聽不變，但有效進張由 7 張增加為 15 張（2 倍多、多 8 張）：
-    # 11/1 放寬後預設（improve）也碰；門檻還是 2 倍、多 12 張時不碰
+    # 10/21 23:43：六六六萬 三四五筒 七八九筒 一二二條 四五五條 二萬，一向聽只等三條 4 張；對家打二條，
+    # 碰了打一條還是一向聽、進張 29 張（11/1 放寬：1.5 倍、多 8 張就碰）；門檻改成多 30 張時不碰
     import agent.rule_agent
 
-    state = response_state("11223789m99m4p56779s", "2m")
+    state = response_state("2666m345789p122455s", "2s", source=2)
     assert choose_rule_action(state, Random(1))[1].kind == ActionType.PUNG
-    monkeypatch.setattr(agent.rule_agent, "WIDEN_EXTRA", 12)
+    monkeypatch.setattr(agent.rule_agent, "WIDEN_EXTRA", 30)
     assert choose_rule_action(state, Random(1))[1].kind == ActionType.PASS
     monkeypatch.setattr(agent.rule_agent, "CLAIM_MODE", "loose")
     _, action = choose_rule_action(state, Random(1))
@@ -381,11 +381,16 @@ def test_ties_discard_the_most_isolated_tile():
 
 
 def test_claim_modes():
-    # 經典_碰.png：一向聽碰二萬向聽不變、進張 7 → 15 張 → loose 會碰；improve 也碰（claim_widens，11/1 放寬）
+    # 經典_碰.png：一一二二三萬 七八九萬 九九萬 四筒 五六七七九條，上家打二萬。一向聽、進張 7 張；碰了還是一向聽、
+    # 進張 12 張（一三萬等的二萬自己碰掉三張，11/16 起扣掉，原本算 15）、吃一二三萬 13 張 → loose 吃碰（吃較多）；
+    # improve 不夠 1.5 倍又多 8 張（claim_widens）不吃碰
     state = response_state("11223789m99m4p56779s", "2m")
-    assert choose_rule_action_for_player(state, 1, claim_mode="loose").kind == ActionType.PUNG
-    assert choose_rule_action_for_player(state, 1, claim_mode="improve").kind == ActionType.PUNG
+    assert choose_rule_action_for_player(state, 1, claim_mode="loose").kind == ActionType.CHOW
+    assert choose_rule_action_for_player(state, 1, claim_mode="improve").kind == ActionType.PASS
     assert choose_rule_action_for_player(state, 1, claim_mode="near").kind == ActionType.PASS
+    # 10/21 23:43 一向聽 4 → 29 張：improve 也碰
+    state = response_state("2666m345789p122455s", "2s", source=2)
+    assert choose_rule_action_for_player(state, 1, claim_mode="improve").kind == ActionType.PUNG
     # 碰完聽牌（一向聽 → 聽牌）：near 也碰
     state = response_state("111222333m44p77p5s89s", "4p", source=2)
     assert choose_rule_action_for_player(state, 1, claim_mode="near").kind == ActionType.PUNG
@@ -471,13 +476,34 @@ def test_claim_that_widens_a_one_shanten_hand_is_taken():
     pung = next(a for a in legal_actions(state, 0) if a.kind == ActionType.PUNG)
     before = hand_value(players[0].hand, 0)
     after = claim_value(players[0].hand, 0, pung, state.last_discard)
-    assert before == (1, -4) and after[0] == 1 and -after[1] >= 30
+    assert before == (1, -4) and after == (1, -29)  # 碰進副露的三張二條不算進張
     assert claim_widens(before, after) and network_claim_is_worth(state, 0, pung)
     # 向聽不變、只多幾張進張的照舊不吃碰
     assert claim_widens((1, -16), (1, -24))       # 1.5 倍、多 8 張（11/1 放寬）
     assert not claim_widens((1, -16), (1, -22))
     assert not claim_widens((1, -4), (1, -10))     # 2.5 倍但只多 6 張
     assert not claim_widens((2, -4), (2, -40))
+
+
+def test_claim_outs_exclude_the_tiles_that_went_into_the_meld():
+    from agent.rule_agent import claim_narrows, claim_value, hand_value, network_claim_is_worth
+    from game.rules import ActionType, GameState, Phase, PlayerState, legal_actions
+
+    # 11/16 01:27：二萬 六六七七八九萬 二四筒 七八九筒 一二三條 四條，下家打七萬；碰了打二萬只等三筒 4 張、七萬 1 張
+    players = [PlayerState() for _ in range(4)]
+    players[0].hand = to_counts(parse("2667789m24789p1234s"))
+    players[1].discards = parse("7m")
+    state = GameState([0] * 60, players, phase=Phase.RESPONSE, last_discard=parse("7m")[0],
+                      discard_player=1, response_players=[0])
+    pung = next(a for a in legal_actions(state, 0) if a.kind == ActionType.PUNG)
+    before = hand_value(players[0].hand, 0)
+    after = claim_value(players[0].hand, 0, pung, state.last_discard)
+    assert before[0] == 2 and after == (1, -5)  # 原本把碰掉的七萬算成還有 4 張（進張 8）
+    assert claim_narrows(before, after) and not network_claim_is_worth(state, 0, pung)
+    # 吃碰完聽牌只等 4 張很正常，不算拆手；向聽變好而進張還夠的照吃碰
+    assert not claim_narrows((1, -20), (0, -4))
+    assert not claim_narrows((2, -20), (1, -8))
+    assert not claim_narrows((2, -18), (1, -7))
 
 
 def test_network_does_not_claim_when_concealed_and_already_tenpai():

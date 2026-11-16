@@ -204,10 +204,13 @@ def swap_gift_cost(tile: int) -> float:
     return 0.15
 
 
-def hand_value(hand: Sequence[int], n_open_melds: int) -> tuple[int, int]:
-    """(向聽數, -有效進張張數)，越小越好；有效進張以自己手上沒有的張數計。"""
+def hand_value(hand: Sequence[int], n_open_melds: int,
+               held: Sequence[int] | None = None) -> tuple[int, int]:
+    """(向聽數, -有效進張張數)，越小越好；有效進張以自己手上沒有的張數計。
+    held：另外扣掉的張數（剛吃碰進副露的三張：11/16 01:27 碰七萬後 八九萬 等七萬，自己副露裡就有三張）。"""
     hand = list(hand)
-    outs = sum(4 - hand[tile] for tile in effective_tiles(hand, n_open_melds))
+    outs = sum(max(0, 4 - hand[tile] - (held[tile] if held is not None else 0))
+               for tile in effective_tiles(hand, n_open_melds))
     return shanten(hand, n_open_melds), -outs
 
 
@@ -223,6 +226,9 @@ def claim_value(hand: Sequence[int], n_open_melds: int, action: Action,
         concealed[tile] -= 1
     if action.kind == ActionType.KONG:
         return shanten(concealed, n_open_melds + 1), 0
+    held = [0] * len(concealed)
+    for tile in action.tiles:
+        held[tile] += 1
     options = []
     for tile in allowed_discards(concealed, forbidden_after_claim(action, claimed)):
         concealed[tile] -= 1
@@ -234,7 +240,7 @@ def claim_value(hand: Sequence[int], n_open_melds: int, action: Action,
         if value != lowest:
             continue
         concealed[tile] -= 1
-        candidate = hand_value(concealed, n_open_melds + 1)
+        candidate = hand_value(concealed, n_open_melds + 1, held)
         concealed[tile] += 1
         best = candidate if best is None else min(best, candidate)
     assert best is not None
@@ -515,6 +521,21 @@ def claim_widens(before: tuple[int, int], after: tuple[int, int]) -> bool:
             and outs_after >= WIDEN_RATIO * outs_before and outs_after - outs_before >= WIDEN_EXTRA)
 
 
+NARROW_MIN_OUTS = 8
+NARROW_RATIO = 3
+"""claim_narrows：吃碰完還沒聽牌、進張不到 NARROW_MIN_OUTS 張、又不到吃碰前的 1/NARROW_RATIO 就不吃碰。"""
+
+
+def claim_narrows(before: tuple[int, int], after: tuple[int, int]) -> bool:
+    """吃碰讓向聽變好一級，卻把手拆得只剩幾張進張（hand_value 的 (向聽, −進張)）。11/16 01:27 二萬 六六七七八九萬 二四筒
+    七八九筒 一二三條 四條（二向聽、進張 53 張）碰下家的七萬、打二萬：一向聽，但只等三筒 4 張和自己碰掉三張的七萬 1 張；
+    之後摸三筒就單等那張七萬。11/1～11/16 的 1093 次吃碰裡只有 3 次這樣（11/1 00:57 碰二筒 42 → 7、02:14 吃五六七條 44 → 7）；
+    吃碰完聽牌的不算（聽 4 張很正常）。"""
+    outs_before, outs_after = -before[1], -after[1]
+    return (after[0] >= 1 and before[0] - after[0] == 1
+            and outs_after < NARROW_MIN_OUTS and outs_after * NARROW_RATIO < outs_before)
+
+
 def network_claim_is_worth(state: GameState, player: int, action: Action) -> bool:
     """網路要吃碰時的檢查：吃碰完打掉最好的一張後向聽一定要變好；碰會加台的字牌（三元、圈風、
     認得出莊家時的門風）只要向聽不變差。10/20 02:51～15:17 網路吃碰 316 次中 26 次向聽沒變好（數牌 23 次，
@@ -531,6 +552,8 @@ def network_claim_is_worth(state: GameState, player: int, action: Action) -> boo
     after = claim_value(me.hand, me.open_melds, action, state.last_discard)
     if action.kind == ActionType.PUNG and honor_tai(state, player, state.last_discard):
         return after[0] <= before[0]
+    if claim_narrows(before, after):
+        return False
     return after[0] < before[0] or claim_widens(before, after)
 
 

@@ -272,10 +272,16 @@ class RiverWatch:
         self.exposed[claimer] += tiles
         self._credited = (source, claimer, tiles)
 
-    def own_claim(self, tiles) -> None:
-        """自己吃碰完成：用掉的手牌（被吃碰的那張已在別家牌河）。"""
-        self.exposed["me"] += list(tiles)
+    def own_claim(self, tiles, claimed: int | None = None, source: str | None = None) -> None:
+        """自己吃碰完成：用掉的手牌，加上被吃碰的那張（claimed，source 打的）——它在放大圓框裡就被我們拿走、
+        不會落進牌河（11/1～11/16 自己吃碰 1150 次，牌河只有 31 次記到那張），不記的話整局都當成場上還有一張：
+        11/16 01:27 碰七萬後 八九萬 聽七萬，自己碰了三張卻算成「剩 2 張」。source 的牌河最後一張就是它時不重複記。"""
         tiles = list(tiles)
+        self.exposed["me"] += tiles
+        if claimed is not None:
+            river = self.tracker.discards.get(source, []) if source is not None else []
+            if not river or river[-1] != claimed:
+                self.exposed["me"].append(claimed)
         if len(tiles) == 2 and tiles[0] == tiles[1]:
             self.my_pungs.append(tiles[0])
 

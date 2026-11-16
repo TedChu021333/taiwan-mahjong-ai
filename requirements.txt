@@ -6,3 +6,4 @@ mss>=9.0
 pillow>=10.0
 PyAutoGUI>=0.9.54
 pytest>=8.0
+imageio-ffmpeg>=0.5   # 錄影（python -m hint --record）用
