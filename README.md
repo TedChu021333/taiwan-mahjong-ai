@@ -192,7 +192,7 @@ python -m eval.arena --variant nn:models/rl.pt --baseline rule --games 2000 --wo
 python -m pytest tests
 ```
 
-以上指令都在 `.venv-train\Scripts\` 的 python 下執行。畫面模板（`train/`）不在 repo 中；沒有模板時，`play/` 的牌桌會改用文字畫牌面。剛下載的 repo 跑測試是 399 個通過、49 個略過
+以上指令都在 `.venv-train\Scripts\` 的 python 下執行。畫面模板（`train/`）不在 repo 中；沒有模板時，`play/` 的牌桌會改用文字畫牌面。剛下載的 repo 跑測試是 408 個通過、49 個略過
 （略過的是需要 `train/` 遊戲截圖的辨識測試）。`launcher.pyw` 是總選單的按鈕版，可以做成桌面捷徑。
 
 ## 作者

@@ -210,7 +210,7 @@ python -m pytest tests
 ```
 
 Run these with the python in `.venv-train\Scripts\`. The screen templates (`train/`) are not in the repository;
-without them the `play/` table draws tile faces as text. On a fresh clone the test suite gives 399 passed and
+without them the `play/` table draws tile faces as text. On a fresh clone the test suite gives 408 passed and
 49 skipped (the skipped tests need game screenshots from `train/`). `launcher.pyw` is a button version of the menu
 that can be used as a desktop shortcut.
 
