@@ -37,8 +37,23 @@ def export_tiles() -> None:
         source = art.template(tile)
         if source is None:
             raise SystemExit(f"train/templates 沒有第 {tile} 種牌的模板")
-        source.resize(TILE_SIZE, Image.LANCZOS).save(out / f"{tile}.png", optimize=True)
-    print(f"已匯出 34 張牌面圖到 {out}")
+        normalize_white(source).resize(TILE_SIZE, Image.LANCZOS).save(out / f"{tile}.png", optimize=True)
+    print(f"已匯出 34 張牌面圖到 {out}（花牌 34～41.png 是 11/16 從結算截圖裁的，不在這裡重做）")
+
+
+FACE_WHITE = (248, 250, 250)
+"""牌面白底的亮度（第 90 百分位）。五萬、六萬、三筒、六筒的模板是在畫面變暗時截的（白底只有約 226），
+11/16 使用者看出六萬比較暗：每張都把白底校正到這個亮度。"""
+
+
+def normalize_white(image):
+    import numpy as np
+    from PIL import Image
+
+    pixels = np.asarray(image.convert("RGB")).astype(np.float32)
+    white = np.percentile(pixels.reshape(-1, 3), 90, axis=0)
+    scaled = pixels * (np.array(FACE_WHITE, dtype=np.float32) / np.maximum(white, 1))
+    return Image.fromarray(scaled.clip(0, 255).astype(np.uint8))
 
 
 def export_model() -> None:
