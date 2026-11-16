@@ -716,7 +716,7 @@ def live(interval: float, overlay: bool, auto: bool, record: Path | None = None)
     if record is not None:
         from hint.recorder import Recorder
 
-        recorder = Recorder(record)
+        recorder = Recorder(record, notify=lambda text: log(f"[{time.strftime('%H:%M:%S')}] {text}"))
         recorder.start()
         print(f"錄影中，結束後存到 {record}", flush=True)
     try:
@@ -725,7 +725,8 @@ def live(interval: float, overlay: bool, auto: bool, record: Path | None = None)
     finally:
         if recorder is not None:
             recorder.stop()
-            print(f"錄影已存到 {record}（{recorder.seconds / 60:.1f} 分鐘），提示另存在 {recorder.subtitle_path}；"
+            gaps = f"，中斷過 {recorder.interruptions} 次（缺的時間已跳過、字幕對齊）" if recorder.interruptions else ""
+            print(f"錄影已存到 {record}（{recorder.seconds / 60:.1f} 分鐘{gaps}），提示另存在 {recorder.subtitle_path}；"
                   f"要把提示畫進影片：python -m hint.recorder \"{record}\" [--start 分:秒 --end 分:秒]", flush=True)
 
 

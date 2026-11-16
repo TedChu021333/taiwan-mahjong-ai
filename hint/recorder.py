@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import threading
 import time
@@ -35,6 +36,9 @@ BIG, SMALL = 37, 20
 ASS_FONT_SCALE = 1.4
 """libass 的字級是整行高度（含行距），微軟正黑體的字面只佔約七成；放大 1.4 倍才和小視窗的字一樣大。"""
 ACTIVE_ALPHA, IDLE_ALPHA = 0.92, 0.45
+HOLD_SECONDS = 3.0
+"""燒進影片時，每個建議至少停 3 秒才變回「等待中」（自動模式一出建議就點下去，吃碰、按聽的提示只亮 1～2 秒，
+影片裡看不清楚；11/16 使用者看第 1 支剪輯覺得吃碰沒錄進去）。下一個建議來了照樣馬上換。"""
 
 
 def ffmpeg() -> str:
@@ -55,23 +59,78 @@ class Timeline:
         if track[-1][1] != value:
             track.append((t, value))
 
+    def remap(self, convert: Callable[[float], float]) -> "Timeline":
+        """把時間換算過（例如對到接起來的影片）；換算後時間一樣的只留最後一個。"""
+        def mapped(track: list) -> list:
+            out: list = []
+            for t, value in track:
+                t = convert(t)
+                if out and out[-1][0] == t:
+                    out[-1] = (t, value)
+                elif not out or out[-1][1] != value:
+                    out.append((t, value))
+            return out or list(track[:1])
+
+        return Timeline(mapped(self.advice), mapped(self.table), mapped(self.melds))
+
+    def hold(self, seconds: float) -> "Timeline":
+        """提示框的建議至少停 seconds 秒：接在建議後面的「空的」往後移（最多到下一個建議）。"""
+        advice: list = []
+        for i, (t, value) in enumerate(self.advice):
+            if value is None and advice and advice[-1][1] is not None:
+                limit = self.advice[i + 1][0] if i + 1 < len(self.advice) else float("inf")
+                t = min(max(t, advice[-1][0] + seconds), limit)
+            if advice and advice[-1][0] >= t:
+                advice[-1] = (advice[-1][0], value)  # 被擠掉了：直接換成新的
+                continue
+            advice.append((t, value))
+        return Timeline(advice, list(self.table), list(self.melds))
+
+
+WATCH_INTERVAL = 1.0
+"""每秒看一次 ffmpeg 還活著沒。"""
+CLUSTER_MS = 1000
+"""mkv 每秒寫一個 cluster（預設 5 秒）、每個封包立刻寫進檔案（-flush_packets；ffmpeg 的輸出緩衝 256 KB，
+被砍掉時留在緩衝裡的就沒了：砍在 5.5 秒的測試只剩半個 cluster、一張畫面都讀不到）。"""
+QUICK_FAILURE_SECONDS = 10.0
+MAX_QUICK_FAILURES = 3
+"""重新開始後 10 秒內又死掉算一次快速失敗，連續 3 次就放棄，免得一直重開。"""
+
 
 class Recorder:
+    """ffmpeg 在背景錄螢幕；中途死掉就自動開新的一段（11/16 15:14 錄了 41 秒就停，之後兩小時全沒錄到，
+    當時 stderr 丟掉了、原因不明，ffmpeg 單獨錄又正常），結束時各段接成一個 mp4，字幕時間照各段實際長度對齊
+    （缺的那段時間直接跳過）。ffmpeg 的訊息存成同名 .log。"""
+
     def __init__(self, path: Path, clock: Callable[[], float] = time.monotonic,
-                 launcher: Callable[[list[str]], subprocess.Popen] | None = None) -> None:
+                 launcher: Callable[[list[str]], subprocess.Popen] | None = None,
+                 notify: Callable[[str], None] = print,
+                 duration: Callable[[Path], float] | None = None) -> None:
         self.path = path
         self.clock = clock
-        self._launch = launcher or (lambda command: subprocess.Popen(command, stdin=subprocess.PIPE,
-                                                                     stderr=subprocess.DEVNULL))
+        self._launch = launcher or self._popen
+        self.notify = notify
+        self._duration = duration or video_duration
         self.timeline = Timeline()
         self.started: float | None = None
         self.seconds = 0.0
+        self.interruptions = 0
+        self.segments: list[tuple[Path, float]] = []
+        """(各段的 mkv, 開始錄的時間（從開錄算起的秒數）)。"""
         self._process: subprocess.Popen | None = None
+        self._log = None
         self._lock = threading.Lock()
+        self._stopping = threading.Event()
+        self._watcher: threading.Thread | None = None
+        self._quick_failures = 0
 
     @property
     def subtitle_path(self) -> Path:
         return self.path.with_suffix(".ass")
+
+    @property
+    def log_path(self) -> Path:
+        return self.path.with_suffix(".log")
 
     def _now(self) -> float:
         return 0.0 if self.started is None else max(0.0, self.clock() - self.started)
@@ -88,30 +147,130 @@ class Recorder:
         with self._lock:
             Timeline.add(self.timeline.melds, self._now(), {k: v for k, v in texts.items() if v})
 
-    def start(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        command = [ffmpeg(), "-hide_banner", "-y", "-f", "lavfi",
+    def _popen(self, command: list[str]) -> subprocess.Popen:
+        if self._log is None:
+            self._log = open(self.log_path, "a", encoding="utf-8")
+        self._log.write(f"\n==== {time.strftime('%Y-%m-%d %H:%M:%S')} {' '.join(command)}\n")
+        self._log.flush()
+        return subprocess.Popen(command, stdin=subprocess.PIPE, stderr=self._log)
+
+    def _segment_path(self) -> Path:
+        n = len(self.segments) + 1
+        return self.path.with_suffix(".mkv") if n == 1 else self.path.with_name(f"{self.path.stem}_{n}.mkv")
+
+    def _launch_segment(self) -> None:
+        path = self._segment_path()
+        command = [ffmpeg(), "-hide_banner", "-nostats", "-y", "-f", "lavfi",
                    "-i", f"ddagrab=output_idx=0:framerate={FPS}",
                    "-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq", "-rc", "vbr", "-cq", str(CQ), "-b:v", "0",
-                   str(self.path.with_suffix(".mkv"))]
+                   "-cluster_time_limit", str(CLUSTER_MS), "-flush_packets", "1", str(path)]
         self._process = self._launch(command)
+        self.segments.append((path, self._now()))
+
+    def start(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.started = self.clock()
+        self._launch_segment()
+        self._watcher = threading.Thread(target=self._watch, name="recorder-watch", daemon=True)
+        self._watcher.start()
+
+    def _watch(self) -> None:
+        while not self._stopping.wait(WATCH_INTERVAL):
+            self.check()
+
+    def check(self) -> None:
+        """ffmpeg 死了就記一筆、重新開一段（背景執行緒每秒呼叫一次）。"""
+        with self._lock:
+            process = self._process
+            if process is None or self._stopping.is_set() or process.poll() is None:
+                return
+            now = self._now()
+            self.interruptions += 1
+            if now - self.segments[-1][1] < QUICK_FAILURE_SECONDS:
+                self._quick_failures += 1
+            else:
+                self._quick_failures = 0
+            self._process = None
+            if self._quick_failures >= MAX_QUICK_FAILURES:
+                self.notify(f"錄影在 {now / 60:.1f} 分時中斷（ffmpeg 結束碼 {process.returncode}），"
+                            f"連續 {MAX_QUICK_FAILURES} 次剛開就死掉，不再重試；原因看 {self.log_path}")
+                return
+            self._launch_segment()
+            self.notify(f"錄影在 {now / 60:.1f} 分時中斷（ffmpeg 結束碼 {process.returncode}），已重新開始錄第 "
+                        f"{len(self.segments)} 段；原因看 {self.log_path}")
+
+    def _end_process(self) -> None:
+        if self._process is None:
+            return
+        try:
+            self._process.communicate(b"q", timeout=15)
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            self._process.kill()
+        self._process = None
+
+    def video_time(self, durations: list[float]) -> Callable[[float], float]:
+        """開錄算起的秒數 → 接起來的影片裡的秒數：落在各段之間的缺口就對到前一段的結尾。"""
+        offsets, total = [], 0.0
+        for length in durations:
+            offsets.append(total)
+            total += length
+
+        def convert(t: float) -> float:
+            index = max((i for i, (_, begin) in enumerate(self.segments) if begin <= t), default=0)
+            return offsets[index] + min(max(0.0, t - self.segments[index][1]), durations[index])
+
+        return convert
 
     def stop(self) -> None:
-        """停止錄影：mkv（中途當掉也讀得到）轉成 mp4，寫出 .ass。"""
-        self.seconds = self._now()
-        if self._process is not None:
-            try:
-                self._process.communicate(b"q", timeout=15)
-            except (subprocess.TimeoutExpired, OSError, ValueError):
-                self._process.kill()
-            mkv = self.path.with_suffix(".mkv")
-            if mkv.exists():
-                done = subprocess.run([ffmpeg(), "-v", "error", "-y", "-i", str(mkv), "-c", "copy",
-                                       "-movflags", "+faststart", str(self.path)])
-                if done.returncode == 0 and self.path.exists():
-                    mkv.unlink()
-        self.subtitle_path.write_text(build_ass(self.timeline, self.seconds), encoding="utf-8-sig")
+        """停止錄影：各段 mkv（中途當掉也讀得到）接成 mp4，寫出 .ass。"""
+        self._stopping.set()
+        with self._lock:
+            self._end_process()
+        if self._watcher is not None:
+            self._watcher.join(timeout=5)
+        wall = self._now()
+        durations = []
+        for i, (path, begin) in enumerate(self.segments):
+            end = self.segments[i + 1][1] if i + 1 < len(self.segments) else wall
+            durations.append(max(0.0, min(end - begin, self._duration(path) or 0.0)))
+        convert = self.video_time(durations) if self.segments else (lambda t: t)
+        self.seconds = sum(durations)
+        usable = [(path, length) for (path, _), length in zip(self.segments, durations) if length > 0 and path.exists()]
+        if usable and self._concat(usable):
+            for path, _ in self.segments:
+                path.unlink(missing_ok=True)
+        if self._log is not None:
+            self._log.close()
+            self._log = None
+        self.subtitle_path.write_text(build_ass(self.timeline.remap(convert), self.seconds), encoding="utf-8-sig")
+
+    def _concat(self, segments: list[tuple[Path, float]]) -> bool:
+        """各段（mkv, 秒數）不重新編碼接成一個 mp4；被砍掉的 mkv 沒有長度，concat 清單裡要寫明。"""
+        if len(segments) == 1:
+            command = [ffmpeg(), "-v", "error", "-y", "-i", str(segments[0][0])]
+        else:
+            listing = self.path.with_suffix(".txt")
+            listing.write_text("".join(f"file '{path.resolve().as_posix()}'\nduration {length:.3f}\n"
+                                       for path, length in segments), encoding="utf-8")
+            command = [ffmpeg(), "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing)]
+        done = subprocess.run(command + ["-c", "copy", "-movflags", "+faststart", str(self.path)])
+        if len(segments) > 1:
+            self.path.with_suffix(".txt").unlink(missing_ok=True)
+        return done.returncode == 0 and self.path.exists()
+
+
+def video_duration(path: Path) -> float:
+    """影片實際有幾秒（讀不到畫面算 0）：imageio-ffmpeg 沒附 ffprobe，而且 ffmpeg 被砍掉留下的 mkv 沒寫結尾、
+    標頭沒有長度，所以整個檔案走一遍（-c copy 不解碼，兩小時約幾秒）、讀進度最後的 time=。"""
+    if not path.exists():
+        return 0.0
+    done = subprocess.run([ffmpeg(), "-hide_banner", "-v", "error", "-stats", "-i", str(path), "-c", "copy",
+                          "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    times = re.findall(r"time=\s*(\d+):(\d+):(\d+(?:\.\d+)?)", done.stderr)
+    if not times:
+        return 0.0
+    hours, minutes, seconds = times[-1]
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
 
 
 # ---- 字幕（.ass）：照 hint.overlay 小視窗的位置、大小、配色 ----
@@ -180,8 +339,11 @@ def default_positions() -> dict[str, tuple[int, int]]:
     return positions
 
 
-def build_ass(timeline: Timeline, end: float, positions: dict[str, tuple[int, int]] | None = None) -> str:
+def build_ass(timeline: Timeline, end: float, positions: dict[str, tuple[int, int]] | None = None,
+              hold: float = HOLD_SECONDS) -> str:
     positions = positions or default_positions()
+    if hold > 0:
+        timeline = timeline.hold(hold)
     changes = sorted({t for track in (timeline.advice, timeline.table, timeline.melds) for t, _ in track} | {end})
     header = (
         "[Script Info]\nScriptType: v4.00+\n"
