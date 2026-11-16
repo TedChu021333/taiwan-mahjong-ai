@@ -19,12 +19,14 @@
 > Live use is for research only: hint mode with human players, auto-play only in all-bot practice rooms, no detection evasion.
 > Full English documentation: [README.en.md](README.en.md).
 
+**線上試玩（不用安裝）**：<https://tedchu021333.github.io/taiwan-mahjong-ai/> ——在瀏覽器裡直接和 AI 對打，可選「完整一圈」或「單局簡化」。
+
 從零打造的台灣 16 張麻將 AI：自己寫規則引擎與模擬器，用模仿學習加強化學習（PPO 自我對打）訓練出策略網路，
 再用電腦視覺即時讀取遊戲畫面，在手機遊戲「明星三缺一」（電腦上用 Google Play Games 執行）的經典版牌桌上給出打牌建議。
 
 > 研究用途說明：本專題是學習強化學習與電腦視覺的個人研究。與真人對戰的牌桌只使用「提示模式」
 > （AI 建議、人自己點）；自動點擊只在對手全是電腦的訓練場做過實驗，程式沒有任何規避偵測的設計。
-> 自動操作可能違反遊戲服務條款，請勿用於真人對局。遊戲畫面素材不包含在本 repo 中。
+> 自動操作可能違反遊戲服務條款，請勿用於真人對局。除了網頁版用的 34 張牌面圖（`web/tiles/`，取自遊戲截圖），遊戲畫面素材不包含在本 repo 中。
 
 | 四家 AI 互打（觀戰模式，手牌全開） | 每局結算：台數明細與四家的牌 |
 |---|---|
@@ -80,6 +82,7 @@ flowchart LR
 | `control/` | 把決定轉成點擊（僅訓練場實驗用）、遊戲視窗管理 |
 | `eval/` | 策略配對比較（arena）、讀結算截圖統計戰績、逐次放槍分析與放槍估計校準 |
 | `play/` | 自己的 Tk 牌桌：人 vs 三家 AI、四家 AI 觀戰，每局記錄並和 AI 的選擇比對復盤 |
+| `web/` | 網頁版人機對戰：用 Pyodide 在瀏覽器裡跑同一套 Python 規則與 AI（網路改用 numpy 推論，不需要 PyTorch），GitHub Pages 自動部署 |
 | `tests/` | 每個模組的 pytest 測試 |
 
 ## 方法
@@ -139,6 +142,10 @@ flowchart LR
   要確認 +0.2 台的進步需要約 6000 對配對對局。
 
 ## 安裝與執行
+
+只想和 AI 打一場的話不用安裝：開 <https://tedchu021333.github.io/taiwan-mahjong-ai/> 就能玩（電腦或手機橫向）。
+規則、計分與三家電腦和下面的 `play/` 完全是同一套程式，只是搬到瀏覽器裡跑；
+想在自己電腦上開網頁版：`python -m web.build --serve`，再開 <http://localhost:8000>。
 
 ### 1. 安裝程式（Windows）
 1. 安裝 [Python 3.12](https://www.python.org/downloads/)，安裝畫面記得勾選 **Add python.exe to PATH**。

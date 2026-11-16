@@ -15,7 +15,9 @@ real-time computer-vision pipeline that reads the screen of the Taiwanese mobile
 > At tables with human players the program only gives hints (the AI suggests, a person clicks).
 > Automatic clicking was only tried in practice rooms where all three opponents are the game's own bots,
 > and the program contains no detection-evasion features of any kind. Automating the game may violate its
-> terms of service; do not use it against human players. Game graphics are not included in this repository.
+> terms of service; do not use it against human players. Apart from the 34 tile faces used by the web version (`web/tiles/`, cropped from game screenshots), game graphics are not included in this repository.
+
+**Play in your browser (no install)**: <https://tedchu021333.github.io/taiwan-mahjong-ai/> lets you play against the AI, a full round or a single simplified hand.
 
 Code comments and commit messages are in Traditional Chinese; this page describes the design in English.
 
@@ -77,6 +79,7 @@ flowchart LR
 | `control/` | Turns decisions into clicks (practice-room experiments only) and manages the game window |
 | `eval/` | Paired policy comparison (arena), statistics from settlement screenshots, per-deal-in analysis and calibration of the deal-in estimates |
 | `play/` | My own Tk table: you vs three AIs, or watch four AIs; every hand is logged and compared with the AI's choices for review |
+| `web/` | Browser version of the human-vs-AI table: Pyodide runs the same Python rules and AI in the browser (the network is evaluated with numpy, no PyTorch needed); deployed automatically to GitHub Pages |
 | `tests/` | pytest tests for every module |
 
 ## Method
@@ -153,6 +156,10 @@ every override is written to the log:
   of a tai per game, so confirming a +0.2 tai improvement takes about 6,000 paired games.
 
 ## Installation and usage
+
+To just play a game against the AI, nothing needs installing: open <https://tedchu021333.github.io/taiwan-mahjong-ai/> (desktop, or a phone in landscape).
+The rules, scoring and the three AI opponents are exactly the same code as `play/` below, running in the browser.
+To serve the web version locally: `python -m web.build --serve`, then open <http://localhost:8000>.
 
 ### 1. Install (Windows)
 1. Install [Python 3.12](https://www.python.org/downloads/) and tick **Add python.exe to PATH** in the installer.

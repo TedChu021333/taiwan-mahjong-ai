@@ -1,0 +1,39 @@
+name: pages
+
+# 網頁版（和 AI 對打）：組出 web/site 放到 GitHub Pages。
+# 第一次要到 repo 的 Settings → Pages，把 Source 設成「GitHub Actions」。
+on:
+  push:
+    branches: [master]
+    paths: ["web/**", "game/**", "agent/**", "play/**", "training/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # 牌面圖與模型權重已在 web/ 裡，組 site 只用到 Python 標準函式庫
+      - name: Build site
+        run: python -m web.build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/site
+      - id: deployment
+        uses: actions/deploy-pages@v4

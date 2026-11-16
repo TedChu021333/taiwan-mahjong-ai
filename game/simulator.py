@@ -157,7 +157,11 @@ def _choose_with_player_policy(
     state: GameState, rng: Random, policy: PlayerPolicy
 ) -> tuple[int, Action] | None:
     players = state.response_players if state.phase == Phase.RESPONSE else [state.current_player]
-    choices = [(player, policy(state, player, rng)) for player in players]
+    return resolve_choices([(player, policy(state, player, rng)) for player in players])
+
+
+def resolve_choices(choices: list[tuple[int, Action | None]]) -> tuple[int, Action] | None:
+    """同一步各家的決定 → 實際執行的那一個（play.web 一步一步打時也用）。"""
     choices = [(player, action) for player, action in choices if action is not None]
     if not choices:
         return None
@@ -185,6 +189,29 @@ def _win_events(state: GameState, self_draw: bool) -> list[str]:
     if state.robbing_kong:
         return ["搶槓"]
     return [] if state.drawable else ["河底撈魚"]
+
+
+def win_score(state: GameState, player: int, discarder: int | None, win_tile: int | None,
+              events: list[str]) -> Score:
+    """胡牌動作套用後算台數。discarder None＝自摸。"""
+    winner_state = state.players[player]
+    return score_hand(
+        winner_state.hand,
+        winner_state.melds,
+        flowers=winner_state.flowers,
+        self_draw=discarder is None,
+        seat_wind=state.seat_winds[player],
+        round_wind=state.round_wind,
+        win_tile=win_tile,
+        # 莊家有參與（莊家胡或莊家放槍）才加莊家台；非莊自摸時莊家
+        # 多付的部分屬於付款計算，不算在胡牌者的台數裡。
+        dealer=state.dealer in {player, discarder},
+        dealer_streak=state.dealer_streak if state.dealer in {player, discarder} else 0,
+        events=events,
+        gold_tiles=state.gold_tiles,
+        declared=state.declared[player],
+        early_declared=state.early_declared[player],
+    )
 
 
 def _flower_win_result(state: GameState, steps: int, history: list[GameEvent],
@@ -256,24 +283,7 @@ def play_game(
         if observer is not None:
             observer(state, player, action)
         if action.kind == ActionType.WIN:
-            winner_state = state.players[player]
-            score = score_hand(
-                winner_state.hand,
-                winner_state.melds,
-                flowers=winner_state.flowers,
-                self_draw=not win_by_discard,
-                seat_wind=state.seat_winds[player],
-                round_wind=state.round_wind,
-                win_tile=win_tile,
-                # 莊家有參與（莊家胡或莊家放槍）才加莊家台；非莊自摸時莊家
-                # 多付的部分屬於付款計算，不算在胡牌者的台數裡。
-                dealer=state.dealer in {player, discarder},
-                dealer_streak=state.dealer_streak if state.dealer in {player, discarder} else 0,
-                events=events,
-                gold_tiles=state.gold_tiles,
-                declared=state.declared[player],
-                early_declared=state.early_declared[player],
-            )
+            score = win_score(state, player, discarder, win_tile, events)
             return GameResult(
                 state,
                 steps,

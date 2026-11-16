@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>台灣 16 張麻將：和 AI 對打</title>
+<meta name="description" content="在瀏覽器裡和強化學習訓練的台灣 16 張麻將 AI 對打，不用安裝。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect x=%2212%22 y=%224%22 width=%2240%22 height=%2256%22 rx=%226%22 fill=%22%23faf8f0%22 stroke=%22%23228054%22 stroke-width=%224%22/%3E%3Ctext x=%2232%22 y=%2244%22 font-size=%2232%22 text-anchor=%22middle%22 fill=%22%23c81e28%22%3E中%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="rotate">請把手機轉成橫向</div>
+<div id="stage">
+  <div id="table"></div>
+  <div id="overlay"></div>
+  <div id="home" class="screen">
+    <div class="card">
+      <h1>台灣 16 張麻將</h1>
+      <p class="sub">和強化學習訓練的 AI 對打　·　不用安裝，全部在你的瀏覽器裡跑</p>
+      <div class="modes">
+        <button class="mode" data-mode="full" disabled>
+          <b>完整一圈</b>
+          <span>換三張、金牌、連莊，四家都當過莊才結束</span>
+        </button>
+        <button class="mode" data-mode="simple" disabled>
+          <b>單局簡化</b>
+          <span>沒有換三張和金牌，打一局就結算</span>
+        </button>
+      </div>
+      <p id="status">載入中…</p>
+      <details>
+        <summary>怎麼玩</summary>
+        <ul>
+          <li>點手牌打出；能吃、碰、槓、胡時右下會出現按鈕。</li>
+          <li>換三張：點 0～3 張要換掉的牌，再按「換牌」。</li>
+          <li>按「聽」再點藍框的牌＝打出並宣告聽牌（多 1 台，之後由系統代打）。</li>
+          <li>胡牌要 5 組面子加 1 對眼；底 2 台，每台 50。</li>
+        </ul>
+      </details>
+      <p class="foot">三家電腦是同一個網路（PPO 自我對打約 200 萬局）加實戰護欄。
+        <a href="https://github.com/TedChu021333/taiwan-mahjong-ai" target="_blank" rel="noopener">程式碼在 GitHub</a></p>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
