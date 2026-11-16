@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 SITE = WEB / "site"
-STATIC = ("index.html", "style.css", "app.js", "worker.js")
+STATIC = ("index.html", "style.css", "app.js", "worker.js", "manifest.json", "icon-192.png", "icon-512.png")
 PY_SOURCES = (
     "game/*.py", "agent/*.py", "agent/*.json", "play/__init__.py", "play/game.py", "play/web.py",
     "training/__init__.py", "training/actions.py", "training/encoding.py", "training/numpy_model.py",

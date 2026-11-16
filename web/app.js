@@ -40,6 +40,7 @@ const ui = {
   swapBefore: null,  // 換三張送出時的手牌與換出的牌
   declaredAt: {},    // 座位 → 宣告聽牌時打的是牌河第幾張
   speed: loadSpeed(),
+  boost: 1,          // 小螢幕（手機）文字放大倍數，見 fit()
 };
 function loadSpeed() {
   try { const v = localStorage.getItem("mahjong-speed"); if (v && SPEEDS[v]) return v; } catch (e) { /* 無痕視窗等 */ }
@@ -88,6 +89,7 @@ function tileHtml(x, y, w, h, tile, options = {}) {
   return `<div class="${classes.join(" ")}" style="${style}"${data} title="${tile >= 0 ? tileName(tile) : ""}">${inner}</div>`;
 }
 function text(x, y, value, size = 13, color = "#fff", options = {}) {
+  if (!options.fixed) size = Math.round(size * ui.boost);
   let style = `left:${x}px;top:${y}px;font-size:${size}px;color:${color};`;
   if (options.bold) style += "font-weight:bold;";
   if (options.anchor === "center") style += "transform:translate(-50%,-50%);";
@@ -166,11 +168,17 @@ function drawInfo(view) {
     html += text(x + 18, y + 80, "金牌", 15, "#ffd84d", { bold: true });
     view.gold.forEach((tile, i) => { html += tileHtml(x + 66 + i * 34, y + 66, 32, 50, tile, { gold: true }); });
   }
-  const newest = ui.messages.length - 1;
-  ui.messages.forEach((message, i) => {
-    html += text(x + 18, y + 118 + i * 21, message, i === newest ? 15 : 13, i === newest ? "#fff3c4" : "#9fbfae",
-      { bold: i === newest });
-  });
+  if (ui.boost > 1) {
+    // 手機：字放大後只放得下最新一則，太長就在面板裡換行
+    const message = ui.messages[ui.messages.length - 1];
+    if (message) html += text(x + 18, y + 122, message, 15, "#fff3c4", { bold: true, width: 310 });
+  } else {
+    const newest = ui.messages.length - 1;
+    ui.messages.forEach((message, i) => {
+      html += text(x + 18, y + 118 + i * 21, message, i === newest ? 15 : 13, i === newest ? "#fff3c4" : "#9fbfae",
+        { bold: i === newest });
+    });
+  }
   return html;
 }
 function drawCompass(view) {
@@ -186,10 +194,10 @@ function drawCompass(view) {
     : (ui.lastDiscard && lastIsFrom(view, ui.lastDiscard.player) ? ui.lastDiscard : null);
   if (shown) {
     html += tileHtml(cx - 22, cy - 42, 44, 68, shown.tile, { last: true });
-    html += text(cx, cy + 37, `${view.players[shown.player].name}打出`, 13, "#ffe08a", { anchor: "center", bold: true });
+    html += text(cx, cy + 37, `${view.players[shown.player].name}打出`, 13, "#ffe08a", { anchor: "center", bold: true, fixed: true });
   } else {
     html += text(cx, cy - 10, String(view.wall), 30, "#e8f5ec", { anchor: "center", bold: true });
-    html += text(cx, cy + 24, "牌牆剩餘", 12, "#9fbfae", { anchor: "center" });
+    html += text(cx, cy + 24, "牌牆剩餘", 12, "#9fbfae", { anchor: "center", fixed: true });
   }
   return html;
 }
@@ -314,12 +322,14 @@ function drawBanner(view) {
     <div class="tiles" style="width:${width - 4}px;height:80px;">${tiles}</div></div>`;
 }
 function drawSpeed() {
-  // 右下角（手牌最多 17 張，排到 x≈1222）
-  let html = text(1262, 826, "出牌速度", 13, "#9fbfae");
-  let x = 1262;
+  // 左下角、自己頭像下面直排（手牌從 x=150 開始，右下角在手牌滿 17 張或手機放大字時會被壓到）
+  const k = Math.min(ui.boost, 1.3);
+  let html = text(12, 742, "出牌速度", 13 * k / ui.boost, "#9fbfae");
+  let y = 742 + Math.round(22 * k);
   for (const [key, speed] of Object.entries(SPEEDS)) {
-    html += `<button class="speed${ui.speed === key ? " on" : ""}" data-button="speed:${key}" style="left:${x}px;top:850px;">${speed.label}</button>`;
-    x += key === "normal" ? 54 : 38;
+    html += `<button class="speed${ui.speed === key ? " on" : ""}" data-button="speed:${key}" style="left:12px;top:${y}px;`
+      + `width:${Math.round(64 * k)}px;height:${Math.round(30 * k)}px;font-size:${Math.round(14 * k)}px;">${speed.label}</button>`;
+    y += Math.round(34 * k);
   }
   return html;
 }
@@ -599,6 +609,13 @@ function fit() {
   stage.style.transform = `scale(${scale})`;
   stage.style.left = `${(width - W * scale) / 2}px`;
   stage.style.top = `${(height - H * scale) / 2}px`;
+  // 手機上牌桌縮到約 0.4 倍，字只剩 5～6 像素：縮到 0.7 倍以下時字放大（最多 1.6 倍）
+  const boost = scale < 0.7 ? Math.min(1.6, 0.7 / scale) : 1;
+  if (boost !== ui.boost) {
+    ui.boost = boost;
+    stage.style.setProperty("--boost", boost);
+    draw();
+  }
 }
 window.addEventListener("resize", fit);
 window.addEventListener("orientationchange", () => setTimeout(fit, 200));
@@ -606,6 +623,22 @@ fit();
 for (const button of document.querySelectorAll(".mode")) {
   button.addEventListener("click", () => start(button.dataset.mode));
 }
+(function mobileTips() {
+  const touch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  const standalone = window.matchMedia("(display-mode: standalone)").matches
+    || window.matchMedia("(display-mode: fullscreen)").matches || navigator.standalone;
+  const tip = document.getElementById("tip");
+  const full = document.getElementById("fullscreen");
+  if (document.fullscreenEnabled && touch && !standalone) {
+    full.hidden = false;
+    full.addEventListener("click", () => {
+      document.documentElement.requestFullscreen().then(() => screen.orientation?.lock?.("landscape")).catch(() => {});
+    });
+  }
+  if (touch && !standalone && !document.fullscreenEnabled) {
+    tip.hidden = false; // iPhone：Safari 不能全螢幕，加入主畫面後從主畫面開就沒有工具列
+  }
+})();
 call("ready").then(() => {
   statusLine.textContent = "準備好了，選一種玩法開始";
   for (const button of document.querySelectorAll(".mode")) button.disabled = false;

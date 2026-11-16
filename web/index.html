@@ -7,6 +7,13 @@
 <meta name="description" content="在瀏覽器裡和強化學習訓練的台灣 16 張麻將 AI 對打，不用安裝。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect x=%2212%22 y=%224%22 width=%2240%22 height=%2256%22 rx=%226%22 fill=%22%23faf8f0%22 stroke=%22%23228054%22 stroke-width=%224%22/%3E%3Ctext x=%2232%22 y=%2244%22 font-size=%2232%22 text-anchor=%22middle%22 fill=%22%23c81e28%22%3E中%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="麻將 AI">
+<meta name="theme-color" content="#0b2a1a">
 </head>
 <body>
 <div id="rotate">請把手機轉成橫向</div>
@@ -29,6 +36,8 @@
         </button>
       </div>
       <p id="status">載入中…</p>
+      <p id="tip" class="tip" hidden>手機玩：按 Safari 下方的「分享」→「加入主畫面」，從主畫面打開就是全螢幕、牌和字都比較大</p>
+      <button id="fullscreen" class="tip-button" hidden>全螢幕玩（建議）</button>
       <details>
         <summary>怎麼玩</summary>
         <ul>
