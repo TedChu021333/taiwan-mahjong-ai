@@ -282,8 +282,10 @@ function drawButtons(view, actions, swapping) {
     hint = "點 0～3 張要換掉的牌（會浮起來），再按下面的按鈕";
   } else if (view.phase === "response") {
     tile = view.last_discard;
-    title = `${view.players[view.discard_player].name}打出 ${tileName(tile)}`;
-    hint = actions.some((a) => a.kind === "win") ? "可以胡這張！" : "要吃碰嗎？不要就按「過」";
+    const who = view.players[view.discard_player].name;
+    title = view.robbing_kong ? `${who}加槓 ${tileName(tile)}` : `${who}打出 ${tileName(tile)}`;
+    hint = view.robbing_kong ? "可以搶槓胡！（多 1 台）不要就按「過」"
+      : actions.some((a) => a.kind === "win") ? "可以胡這張！" : "要吃碰嗎？不要就按「過」";
   } else {
     if (actions.some((a) => a.kind === "win")) title = "可以自摸！";
     else if (ui.declareMode) title = "宣告聽牌";
@@ -463,7 +465,13 @@ function claimMessage(view, out) {
   const source = from ? `${view.players[from.player].name}打的 ` : "";
   if (out.kind === "pung") return `${name} 碰 ${source}${tileName(out.tile)}`;
   if (out.kind === "chow") return `${name} 吃 ${source}${tileName(from ? from.tile : out.tile)}`;
-  if (out.kind === "kong") return from ? `${name} 槓 ${source}${tileName(out.tile)}` : `${name} 槓 ${tileName(out.tile)}`;
+  if (out.kind === "kong") {
+    if (from) return `${name} 槓 ${source}${tileName(out.tile)}`;
+    const meld = view.players[out.player].melds.find((m) => m.kind === "kong" && m.tiles.includes(out.tile));
+    const hidden = view.players[out.player].melds.some((m) => m.concealed && m.tiles[0] === -1);
+    if (!meld && hidden) return `${name} 暗槓`; // 暗槓的牌別人看不到
+    return meld && meld.concealed ? `${name} 暗槓 ${tileName(out.tile)}` : `${name} 加槓 ${tileName(out.tile)}`;
+  }
   return out.message;
 }
 function meldTiles(view, seat) {
@@ -503,9 +511,15 @@ async function playSession(mode) {
       if (summary.winner != null) {
         // 先在牌桌上講誰胡了、胡哪張，停一下再出結算
         const selfDraw = summary.discarder == null;
-        say(selfDraw ? `${out.view.players[summary.winner].name} 自摸 ${tileName(summary.win_tile)}！`
-          : `${out.view.players[summary.winner].name} 胡 ${out.view.players[summary.discarder].name}打的 ${tileName(summary.win_tile)}！`);
-        await showBanner(summary.winner, selfDraw ? "self_draw" : "win", [summary.win_tile], pace().win);
+        const winner = out.view.players[summary.winner].name;
+        if (summary.win_tile == null) {
+          say(`${winner} ${summary.lines[0] || "花牌胡"}！`);
+          await showBanner(summary.winner, "win", out.view.players[summary.winner].flowers, pace().win);
+        } else {
+          say(selfDraw ? `${winner} 自摸 ${tileName(summary.win_tile)}！`
+            : `${winner} 胡 ${out.view.players[summary.discarder].name}打的 ${tileName(summary.win_tile)}！`);
+          await showBanner(summary.winner, selfDraw ? "self_draw" : "win", [summary.win_tile], pace().win);
+        }
       } else {
         say("流局：牌摸完了，沒有人胡");
         draw();
@@ -578,13 +592,16 @@ async function start(mode) {
 
 // ---- 縮放與啟動 ----
 function fit() {
-  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const box = document.getElementById("viewport");
+  const width = box.clientWidth, height = box.clientHeight;
+  const scale = Math.min(width / W, height / H);
   const stage = document.getElementById("stage");
   stage.style.transform = `scale(${scale})`;
-  stage.style.left = `${(window.innerWidth - W * scale) / 2}px`;
-  stage.style.top = `${(window.innerHeight - H * scale) / 2}px`;
+  stage.style.left = `${(width - W * scale) / 2}px`;
+  stage.style.top = `${(height - H * scale) / 2}px`;
 }
 window.addEventListener("resize", fit);
+window.addEventListener("orientationchange", () => setTimeout(fit, 200));
 fit();
 for (const button of document.querySelectorAll(".mode")) {
   button.addEventListener("click", () => start(button.dataset.mode));

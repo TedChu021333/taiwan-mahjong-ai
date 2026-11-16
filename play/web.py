@@ -130,7 +130,7 @@ def _meld_view(meld, hide_concealed: bool) -> dict:
     concealed = meld.kind == "kong" and meld.from_player is None
     tiles = list(meld.tiles)
     if concealed and hide_concealed:
-        tiles = [-1, tiles[1], tiles[2], -1]  # 暗槓：兩端蓋著（和 Tk 版一樣）
+        tiles = [-1] * len(tiles)  # 別家的暗槓整組蓋著（遊戲裡也看不到是哪張）
     return {"kind": meld.kind, "tiles": tiles, "concealed": concealed}
 
 
@@ -194,6 +194,7 @@ class Session:
             "mode": self.mode, "number": self.number, "dealer": state.dealer, "streak": state.dealer_streak,
             "wall": state.drawable, "gold": list(state.gold_tiles), "phase": str(state.phase),
             "turn": turn, "last_discard": state.last_discard if state.phase == Phase.RESPONSE else None,
+            "robbing_kong": bool(state.robbing_kong) and state.phase == Phase.RESPONSE,
             "discard_player": state.discard_player if state.phase == Phase.RESPONSE else None,
             "players": players, "money_per_tai": MONEY_PER_TAI,
         }

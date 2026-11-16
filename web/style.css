@@ -3,8 +3,10 @@
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: #0b2a1a;
   font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; color: #fff;
-  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
+/* 固定大小的外框：裡面 1400px 寬的舞台不會把手機頁面撐寬（撐寬後手機會整頁縮放，只看得到一角） */
+#viewport { position: fixed; inset: 0; overflow: hidden; }
 #stage {
   position: absolute; left: 0; top: 0; width: 1400px; height: 900px; transform-origin: 0 0;
   background: radial-gradient(ellipse at 50% 45%, #1f7a4a 0%, #14502f 60%, #0d3a22 100%);

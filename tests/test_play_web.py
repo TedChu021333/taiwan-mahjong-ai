@@ -86,3 +86,12 @@ def test_wrong_answers_are_rejected():
         out = session.step()
     with pytest.raises(ValueError):
         session.answer(swap=[0, 0, 0, 0, 0])
+
+
+def test_opponent_concealed_kong_is_hidden():
+    from game.rules import Meld
+    from play.web import _meld_view
+
+    meld = Meld("kong", (5, 5, 5, 5), None)
+    assert _meld_view(meld, hide_concealed=True)["tiles"] == [-1, -1, -1, -1]
+    assert _meld_view(meld, hide_concealed=False)["tiles"] == [5, 5, 5, 5]
