@@ -311,3 +311,22 @@ def test_concealed_kongs_seen_on_screen_stay_for_the_hand():
     assert watch.concealed == {"top": 1}
     watch.new_hand()
     assert watch.concealed == {}
+
+
+def test_guided_search_does_not_read_standing_backs_as_a_pung():
+    """11/16 00:39 新的一局對家還沒有副露、那一端全是立著的牌背：引導搜尋曾把三張牌背當成四筒碰。"""
+    from pathlib import Path
+
+    import cv2
+    import numpy as np
+    import pytest
+
+    from perception.meld_reader import MeldReader
+
+    path = Path("train/經典_副露_對家開局牌背.png")
+    reader = MeldReader.from_directory()
+    if reader is None or not path.exists():
+        pytest.skip("沒有遊戲截圖或副露模板")
+    image = cv2.imdecode(np.fromfile(str(path), np.uint8), cv2.IMREAD_COLOR)
+    assert reader.guided_meld(image, "top", 12, ("pung",)) is None
+    assert reader.read(image)["top"] == []

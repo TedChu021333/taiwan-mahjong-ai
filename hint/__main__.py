@@ -586,9 +586,14 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
                 retries += 1
             else:
                 retries = 0
-            if not actuator.perform(action, observation):
+            performed = actuator.perform(action, observation)
+            if performed and action.kind == ActionType.WIN:
+                win_pressed_at = clock()
+            if not performed:
+                # 剛按過胡（WIN_PRESS_GRACE 秒內）按鈕消失是正常的，不存「胡不到」截圖：11/16 16:30:13 自摸按下去、
+                # 下一幀還是同一手牌、按鈕已經不見，存了一張誤報
                 if action.kind == ActionType.WIN and observation.hand != win_unlit_for \
-                        and win_unlit_shots_left > 0:
+                        and win_unlit_shots_left > 0 and clock() - win_pressed_at >= WIN_PRESS_GRACE:
                     win_unlit_for = observation.hand
                     win_unlit_shots_left -= 1
                     log(f"[{stamp}] 要胡但找不到「胡」按鈕，截圖存到 {save_result(frame, '胡不到_')}",
@@ -809,6 +814,8 @@ def network_options(network) -> str:
             f"，護欄{'開' if getattr(network, 'guard', False) else '關'}")
 
 
+WIN_PRESS_GRACE = 3.0
+"""按下胡之後這麼久內找不到胡按鈕不算「胡不到」（遊戲正在進結算）。"""
 WIN_UNLIT_SHOT_LIMIT = 20
 """AI 要胡、畫面上卻找不到亮著的「胡」時存 `胡不到_` 截圖（同一手牌一張，每次執行最多這麼多張）：
 明槓補牌自摸（槓上開花）兩次只讀到「聽」亮著，遊戲說錯過胡牌（10/20 09:54、11/2 11:37），當下沒截圖查不出原因。"""

@@ -52,6 +52,15 @@ TOP_PITCH = 54
 GUIDED_PITCHES = {"side": range(24, 39, 2), "top": range(48, 63, 2)}
 """引導搜尋吃時，三張牌之間可能的間距。"""
 GUIDED_MIN_SCORE = 0.42
+GUIDED_MIN_FACE = 0.3
+"""引導搜尋找到的每張牌，切圖裡白色（牌面）至少要佔這麼多。11/16 00:39 新的一局對家還沒有副露，那一端全是立著的藍色牌背，
+引導搜尋把三張牌背當成四筒碰（平均 0.47 過了 0.42），副露讀到就整局不消失，AI 一直以為對家有一組不存在的四筒碰。
+牌背 0.0；已知答案截圖裡真的牌 0.47～0.73。"""
+
+
+def face_share(crop: np.ndarray) -> float:
+    gray = crop.astype(np.int16).mean(axis=2) if crop.ndim == 3 else crop
+    return float((gray > 170).mean())
 """引導搜尋：三張平均分數到這個以上才採用（單張讀不到的對家倒著的吃，19:34 四五六筒單張約 0.5）。"""
 GUIDED_MARGIN = 0.02
 """最好的吃要比其他可能的吃（不同的三連號）平均高這麼多，分不出來就不採用。"""
@@ -340,6 +349,8 @@ class MeldReader:
         runner_up = ranked[1][0] if len(ranked) > 1 else -1.0
         if best_average < GUIDED_MIN_SCORE or best_average - runner_up < GUIDED_MARGIN:
             return None
+        if any(hit.crop is not None and face_share(hit.crop) < GUIDED_MIN_FACE for hit in hits):
+            return None  # 有一張沒有白色牌面＝比對到的是立著的牌背或桌布
         return hits
 
     @staticmethod
