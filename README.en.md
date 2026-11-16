@@ -23,7 +23,10 @@ Code comments and commit messages are in Traditional Chinese; this page describe
 |---|---|
 | ![Watch mode](docs/watch.png) | ![Settlement](docs/settlement.png) |
 
-**Live demo video**: [the AI at a real table: dealer repeat, pong, kong and a 15-tai win (YouTube, 2:40)](https://youtu.be/6YxXV6-4GNg).
+**Live demo video** (click to play, 2:40): the AI at a real table, with a dealer repeat, a pong, a kong and a 15-tai win.
+
+[![Live demo: dealer repeat, pong, kong, 15-tai win](https://img.youtube.com/vi/6YxXV6-4GNg/maxresdefault.jpg)](https://youtu.be/6YxXV6-4GNg)
+
 The box at the top shows the AI's decision, the table on the left the deal-in probability of each tile, and the small
 labels next to the three opponents the melds the vision module read; these overlays are logged while recording and
 burned into the video afterwards (`python -m hint --record`).
