@@ -37,14 +37,16 @@ burned into the video afterwards (`python -m hint --record`).
 
 | Item | Result |
 |---|---|
-| RL network vs rule-based AI (simulator, 4,000 paired games each) | **+0.33 ± 0.29 tai per game**; deal-in rate 18.9% → 17.4% |
-| Live play, Oct 28 – Nov 2 (2,155 games vs the game's bots) | Win rate **26%** (bots average about 24%); deal-in rate about 16% |
-| Live play, total on the settlement screens | **+128,815** coins (about −114,000 after the game's 15% cut of winnings; see Conclusions) |
-| Screen reading of my own discards | **99.5%** correct (9 errors in 1,658 tiles) |
-| Code size | About 20,000 lines of Python, 448 pytest tests |
+| RL network + live guards vs rule-based AI (simulator, 20,000 paired games) | **+0.27 ± 0.13 tai per game**; deal-in rate 19.0% → 15.0% |
+| Live play, Oct 28 – Nov 16 (2,253 games vs the game's bots) | Win rate **26.0%**; deal-in rate 15.7% |
+| Live play, total on the settlement screens | **+126,279** coins (about −117,000 after the game's 15% cut of winnings; see Conclusions) |
+| Screen reading of my own discards (live, since Oct 20) | **99.1%** correct (20,303 tiles) |
+| Code size | About 20,000 lines of Python, 469 pytest tests |
 
 *Tai* is the scoring unit of Taiwanese mahjong: harder hands earn more tai, and payments scale with them.
 A *deal-in* means discarding the tile another player wins on, which makes you pay for their hand.
+
+The full comparison of every AI (random, rule-based, expected value, Monte Carlo, imitation, RL) and the accuracy of each vision component are in [the results page](docs/RESULTS.md) (Chinese).
 
 ## Architecture
 
@@ -110,6 +112,9 @@ flowchart LR
    so the network does not just learn to beat itself.
 3. After 10 hours and 964 iterations (about 2 million games), `rl3_0960` became the first AI to beat the
    rule-based AI **significantly** in the simulator. Most of the gain is in defense (fewer deal-ins).
+   After the scoring was corrected from live settlement screens and the rule-based AI kept improving, the network alone
+   is now +0.13 ± 0.14 tai per game (20,000 pairs, not significant) and +0.27 ± 0.13 with the live guards (significant);
+   see [the results page](docs/RESULTS.md).
 
 Network: 60 × 34 input planes, a 10-block 1D residual CNN with 128 channels (about 2.1 million parameters),
 a policy head over 108 actions and a value head (expected tai). The input contains only what that player can see,

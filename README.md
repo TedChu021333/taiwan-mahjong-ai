@@ -12,9 +12,9 @@
 > a 1D residual CNN policy trained by imitation learning and then PPO self-play (~2 million games), and a
 > real-time computer-vision pipeline (template matching, perspective-corrected meld reading) that reads the
 > Taiwanese mobile mahjong game 明星三缺一 and shows move suggestions in an overlay.
-> In the simulator the RL agent beats the rule-based baseline by **+0.33 ± 0.29 tai per game** (4,000 paired games);
-> in 2,155 live games against the game's built-in bots it won **26%** of hands versus about 24% for the bots.
-> Everything is Python (PyTorch, OpenCV), with 448 pytest tests. A trained model is included, so you can play
+> In the simulator the RL agent with its live guards beats the rule-based baseline by **+0.27 ± 0.13 tai per game** (20,000 paired games);
+> in 2,253 live games against the game's built-in bots it won **26%** of hands and dealt in 15.7%.
+> Everything is Python (PyTorch, OpenCV), with 469 pytest tests. A trained model is included, so you can play
 > against the AI or watch four AIs play each other without the game (`python -m play`).
 > Live use is for research only: hint mode with human players, auto-play only in all-bot practice rooms, no detection evasion.
 > Full English documentation: [README.en.md](README.en.md).
@@ -43,11 +43,13 @@
 
 | 項目 | 結果 |
 |---|---|
-| 強化學習網路 vs 規則式 AI（模擬器，各 4000 對同牌配對） | **+0.33 ± 0.29 台／局**，放槍率 18.9% → 17.4% |
-| 實戰 10/28～11/2（對手是遊戲內電腦，2155 局） | 胡牌率 **26%**（三家電腦平均約 24%）、放槍率約 16% |
-| 實戰結算畫面金額合計 | **+128,815**（扣掉遊戲對贏家抽的 15% 後約 −114,000，見「結論」） |
-| 自己出牌的畫面辨識 | 讀對 **99.5%**（1658 張中讀錯 9 張） |
-| 程式規模 | Python 約 2 萬行、448 個 pytest 測試 |
+| 強化學習網路＋實戰護欄 vs 規則式 AI（模擬器，2 萬對同牌配對） | **+0.27 ± 0.13 台／局**，放槍率 19.0% → 15.0% |
+| 實戰 10/28～11/16（對手是遊戲內電腦，2253 局） | 胡牌率 **26.0%**、放槍率 15.7% |
+| 實戰結算畫面金額合計 | **+126,279**（扣掉遊戲對贏家抽的 15% 後約 −117,000，見「結論」） |
+| 自己出牌的畫面辨識（實戰 10/20 起） | 讀對 **99.1%**（20,303 張） |
+| 程式規模 | Python 約 2 萬行、469 個 pytest 測試 |
+
+隨機、規則式、期望值、蒙地卡羅、模仿學習、強化學習各種 AI 的完整比較，以及每一項畫面辨識的準確率，見 [成績總表](docs/RESULTS.md)。
 
 ## 系統架構
 
@@ -104,7 +106,8 @@ flowchart LR
    優勢函數以價值頭預測扣掉運氣成分；GPU 批次推論、多程序同時打約 60 局／秒。
    每局座位隨機換成規則式 AI 或過去版本的自己（對手池），避免只學會打贏自己。
 3. 10 小時、964 輪（約 200 萬局）後的 `rl3_0960` 是第一個在模擬器中**顯著**贏過規則式的 AI，
-   進步主要在防守（放槍率下降）。
+   進步主要在防守（放槍率下降）。之後計分依實戰結算修正、規則式 AI 也持續改進，現在網路單獨對規則式是 +0.13 ± 0.14 台（2 萬對，不顯著），
+   加上實戰護欄是 +0.27 ± 0.13 台（顯著），見 [成績總表](docs/RESULTS.md)。
 
 網路架構：60 × 34 輸入平面、128 寬 10 層 1D 殘差卷積（約 210 萬參數），
 策略頭 108 個動作 + 價值頭（輸贏台數）。輸入只用該玩家看得到的資訊，並加入模仿實戰辨識缺陷的雜訊

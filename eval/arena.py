@@ -8,6 +8,7 @@
 各付；非莊家自摸時莊家多付莊家的 1 台（結算畫面：閒家各付 400、莊家付 450）。
 
 策略代號：
+    random        隨機：能胡就胡，其他從合法動作裡隨機挑（總成績表的下限）
     rule          規則式 AI（目前的預設參數）
     gold:<n>      規則式 AI，打出金牌的代價視同少 n 張有效進張
     blind         規則式 AI，但忽略對手宣告聽牌（看不到「聽」標記時的行為）
@@ -41,6 +42,9 @@ from game.simulator import PlayerPolicy, after_rake, payments, play_game
 
 def make_policy(spec: str) -> PlayerPolicy:
     name, _, arg = spec.partition(":")
+    if name == "random" and not arg:
+        from game.simulator import _choose_random_for_player
+        return _choose_random_for_player
     if name == "rule" and not arg:
         return choose_rule_action_for_player
     if name == "gold" and arg:
