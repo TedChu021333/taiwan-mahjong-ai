@@ -8,6 +8,7 @@ result/
 .venv-train/
 models/*
 !models/rl3_0960.pt
+!models/guard_plain.pt
 training/data/
 result_*/
 hint/meld_position_*.txt

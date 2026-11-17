@@ -55,7 +55,7 @@ flowchart LR
     subgraph Simulation and training
         G[game/<br>rules engine, scoring, simulator] --> T[training/<br>imitation learning → PPO self-play]
         R[agent/rule_agent<br>rule-based AI] -->|teacher and opponents| T
-        T --> M[(policy network<br>rl3_0960)]
+        T --> M[(policy network<br>guard_plain)]
     end
     subgraph Live play
         S[screen capture mss] --> P[perception/<br>hand, discards, melds, buttons, gold tiles]
@@ -115,6 +115,7 @@ flowchart LR
    After the scoring was corrected from live settlement screens and the rule-based AI kept improving, the network alone
    is now +0.13 ± 0.14 tai per game (20,000 pairs, not significant) and +0.27 ± 0.13 with the live guards (significant);
    see [the results page](docs/RESULTS.md).
+4. **Distilling the guards into the network**: with the network plus guards as the teacher, imitation learning continued from `rl3_0960` gives `guard_plain`. With the guards on, it beats `rl3_0960` with the guards by +0.12 ± 0.10 tai per game on the same decks (21,500 pairs, significant), and it is now the live model. A version that also learned auxiliary tasks (opponents' ready hands and waits) was not better.
 
 Network: 60 × 34 input planes, a 10-block 1D residual CNN with 128 channels (about 2.1 million parameters),
 a policy head over 108 actions and a value head (expected tai). The input contains only what that player can see,
@@ -180,7 +181,7 @@ To serve the web version locally: `python -m web.build --serve`, then open <http
 | 3 | You vs three AIs, one full round | No |
 | 4 | Four AIs play each other with all hands open (watch) | No |
 
-The trained model `models/rl3_0960.pt` (about 8.6 MB) is included, so you can play against the AI right away.
+The trained models `models/guard_plain.pt` (live) and `models/rl3_0960.pt` (about 8.6 MB each) are included, so you can play against the AI right away.
 To play against the rule-based AI instead: `.venv-train\Scripts\python -m play --bot rule`.
 
 ### 2. Set up the game (only for hint and auto modes)
@@ -206,8 +207,8 @@ To play against the rule-based AI instead: `.venv-train\Scripts\python -m play -
 
 ```bash
 # You vs three AIs (--bot rule for the rule-based AI); --watch for four AIs with open hands
-python -m play --model models/rl3_0960.pt
-python -m play --model models/rl3_0960.pt --watch
+python -m play --model models/guard_plain.pt
+python -m play --model models/guard_plain.pt --watch
 
 # Training: teacher data → imitation learning → PPO (NVIDIA GPU needed; the author used an RTX 5060)
 python -m training.teacher_data --games 60000 --workers 2      # about 1 hour

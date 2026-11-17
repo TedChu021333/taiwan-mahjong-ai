@@ -17,9 +17,11 @@
 | 蒙地卡羅 AI（每步模擬到局末） | 4,000 | −0.230 | +0.091 ± 0.268 | 25.3% | 17.2% |
 | 模仿學習網路（學規則式） | 20,000 | −0.565 | −0.077 ± 0.117 | 24.4% | 18.7% |
 | 強化學習網路（PPO，`rl3_0960`） | 20,000 | −0.358 | +0.130 ± 0.135 | 24.5% | 17.8% |
-| **強化學習網路＋實戰護欄**（實戰用的版本） | 20,000 | −0.214 | **+0.274 ± 0.126** | 25.0% | **15.0%** |
+| 強化學習網路＋實戰護欄（`rl3_0960`，11/17 以前實戰用） | 20,000 | −0.214 | **+0.274 ± 0.126** | 25.0% | 15.0% |
+| 把護欄學進網路（`guard_plain`）單獨 | 20,000 | −0.262 | **+0.225 ± 0.128** | 25.3% | 16.1% |
+| **`guard_plain`＋實戰護欄**（現在實戰用的版本） | 19,200 | −0.151 | **+0.329 ± 0.127** | 25.4% | **14.8%** |
 
-規則式那一列是同一批牌四家都是規則式時的數字。蒙地卡羅每步要模擬約 1 秒，只跑了 4,000 局，基準那一列在這 4,000 局是 −0.321 台、胡牌率 25.2%、放槍率 19.2%。
+規則式那一列是同一批牌四家都是規則式時的數字。`guard_plain`＋護欄那一列跑到 19,200 局時中斷，基準在這 19,200 局是 −0.479 台。蒙地卡羅每步要模擬約 1 秒，只跑了 4,000 局，基準那一列在這 4,000 局是 −0.321 台、胡牌率 25.2%、放槍率 19.2%。
 
 **怎麼讀這張表**：
 
@@ -28,6 +30,7 @@
 - **單獨的網路沒有顯著贏過規則式**。護欄把網路沒學好的地方補上（有人聽牌時檢查放槍、保住聽牌、吃碰檢查），兩者一起才顯著。
   10/7 剛訓練完時，網路自己對規則式是 +0.33 ± 0.29 台；之後依實戰結算畫面修了計分、規則式 AI 也一直在改進，所以現在差距變小。
 - **模仿學習網路和老師打平**，符合預期：它只學規則式怎麼打。
+- **`guard_plain` 和 `rl3_0960` 在這張表裡分不出高下**（誤差重疊），要直接對打才看得出來，見下一節。
 - **期望值 AI 小幅贏過規則式**；蒙地卡羅局數太少，看不出差別。兩者每步都比網路慢很多，實戰沒有採用。
 
 重現（`--workers` 依電腦核心數調整；14 個 worker 時 2 萬局約 10 分鐘，蒙地卡羅 4,000 局約 30 分鐘）：
@@ -39,9 +42,33 @@ python -m eval.arena --variant mc --baseline rule --games 4000 --workers 14
 python -m eval.arena --variant nn:models/sl_rule.pt --baseline rule --games 20000 --workers 14
 python -m eval.arena --variant nn:models/rl3_0960.pt --baseline rule --games 20000 --workers 14
 python -m eval.arena --variant nnguard:models/rl3_0960.pt --baseline rule --games 20000 --workers 14
+python -m eval.arena --variant nn:models/guard_plain.pt --baseline rule --games 20000 --workers 14
+python -m eval.arena --variant nnguard:models/guard_plain.pt --baseline rule --games 20000 --workers 14
 ```
 
-repo 附有實戰用的 `models/rl3_0960.pt`；模仿學習的 `models/sl_rule.pt` 沒有附上，要照 README 自己訓練。
+repo 附有 `models/rl3_0960.pt` 與實戰用的 `models/guard_plain.pt`；模仿學習的 `models/sl_rule.pt` 沒有附上，要照 README 自己訓練。
+
+### 把護欄學進網路（11/17）
+
+護欄在模擬器裡會改掉網路約 23% 的決定（多半是牌效與牌型檢查）。做法：以 `rl3_0960`＋護欄當老師打牌（每個座位 25% 換成規則式 AI、不記錄），記下 134 萬個決定，從 `rl3_0960` 接著做模仿學習 2 輪（學習率 3e-4，約 3 分鐘）。輸入照樣加上模仿實戰辨識缺陷的雜訊。新網路和老師（網路＋護欄）選一樣的比例是 81.7%，原本的網路只有 70.1%。
+
+同時試了輔助任務（`guard_aux`）：多幾個輸出頭，一起學三家有沒有聽牌、聽哪幾張、自己這局會不會胡或放槍。這些預測學得到（三家聽牌的交叉熵 0.258，只猜平均是 0.479），但打牌沒有變強。
+
+兩個新網路都開護欄，和 `rl3_0960`＋護欄同一副牌直接對打（基準換成 `nnguard:models/rl3_0960.pt`）：
+
+| 比較 | 局數 | 多幾台／局（95% 信賴區間） |
+|---|---:|---:|
+| `guard_plain`＋護欄 對 `rl3_0960`＋護欄 | 21,500 | **+0.119 ± 0.098** |
+| `guard_aux`＋護欄 對 `rl3_0960`＋護欄 | 20,000 | +0.056 ± 0.105 |
+| `guard_plain` 對 `guard_aux`（同一批種子逐局相減） | 20,000 | +0.063 ± 0.079 |
+
+`guard_plain` 是 `rl3_0960` 之後第一個在模擬器裡確認有進步的網路，11/17 起實戰改用它。進步不大（下限約 +0.02 台），還要看實戰戰績。
+
+```bash
+python -m training.teacher_data --games 60000 --workers 14 --teacher nnguard:models/rl3_0960.pt --rule-share 0.25 --out training/data/guard/guard
+python -m training.supervised --data training/data/guard/guard --init models/rl3_0960.pt --lr 3e-4 --epochs 2 --out models/guard_plain.pt
+python -m eval.arena --variant nnguard:models/guard_plain.pt --baseline nnguard:models/rl3_0960.pt --games 20000 --workers 14
+```
 
 ## 2. 畫面辨識的準確率
 

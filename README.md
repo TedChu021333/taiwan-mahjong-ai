@@ -58,7 +58,7 @@ flowchart LR
     subgraph 模擬與訓練
         G[game/<br>規則引擎・計分・模擬器] --> T[training/<br>模仿學習 → PPO 自我對打]
         R[agent/rule_agent<br>規則式 AI] -->|老師與對手| T
-        T --> M[(策略網路<br>rl3_0960)]
+        T --> M[(策略網路<br>guard_plain)]
     end
     subgraph 實戰
         S[螢幕擷取 mss] --> P[perception/<br>手牌・牌河・副露・按鈕・金牌]
@@ -108,6 +108,7 @@ flowchart LR
 3. 10 小時、964 輪（約 200 萬局）後的 `rl3_0960` 是第一個在模擬器中**顯著**贏過規則式的 AI，
    進步主要在防守（放槍率下降）。之後計分依實戰結算修正、規則式 AI 也持續改進，現在網路單獨對規則式是 +0.13 ± 0.14 台（2 萬對，不顯著），
    加上實戰護欄是 +0.27 ± 0.13 台（顯著），見 [成績總表](docs/RESULTS.md)。
+4. **把護欄學進網路**：以網路＋護欄當老師、從 `rl3_0960` 接著做模仿學習，得到 `guard_plain`。它再加上護欄，和 `rl3_0960`＋護欄同一副牌直接對打，每局多 +0.12 ± 0.10 台（2.15 萬對，顯著），現在實戰用它。同時學三家聽牌等輔助任務的版本沒有更好。
 
 網路架構：60 × 34 輸入平面、128 寬 10 層 1D 殘差卷積（約 210 萬參數），
 策略頭 108 個動作 + 價值頭（輸贏台數）。輸入只用該玩家看得到的資訊，並加入模仿實戰辨識缺陷的雜訊
@@ -163,7 +164,7 @@ flowchart LR
 | 3 | 自己 vs 三家 AI，打一圈 | 不用 |
 | 4 | 四家 AI 互打、手牌全開（觀戰） | 不用 |
 
-訓練好的模型 `models/rl3_0960.pt`（約 8.6MB）已包含在 repo 中，下載後就能直接和 AI 對打；
+訓練好的模型 `models/guard_plain.pt`（實戰用）與 `models/rl3_0960.pt`（各約 8.6MB）已包含在 repo 中，下載後就能直接和 AI 對打；
 想和規則式 AI 對打可用 `.venv-train\Scripts\python -m play --bot rule`。
 
 ### 2. 準備遊戲（提示模式、自動模式才需要）
@@ -187,8 +188,8 @@ flowchart LR
 
 ```bash
 # 自己 vs 三家 AI（--bot rule 換規則式 AI）；--watch 四家 AI 互打、手牌全開
-python -m play --model models/rl3_0960.pt
-python -m play --model models/rl3_0960.pt --watch
+python -m play --model models/guard_plain.pt
+python -m play --model models/guard_plain.pt --watch
 
 # 訓練：老師資料 → 模仿學習 → PPO（需要 NVIDIA 顯示卡；作者用 RTX 5060）
 python -m training.teacher_data --games 60000 --workers 2      # 約 1 小時

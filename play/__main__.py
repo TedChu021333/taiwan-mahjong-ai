@@ -1,6 +1,6 @@
 """人機對戰：自己 vs 三家電腦（網路 AI，開實戰護欄），打一圈。
 
-    python -m play [--model models/rl3_0960.pt] [--seed N] [--bot rule] [--watch]
+    python -m play [--model models/guard_plain.pt] [--seed N] [--bot rule] [--watch]
 
 --watch 觀戰模式（10/30 使用者要求）：四家都是電腦、手牌全開，同一個畫面，每家出牌等 5 秒（WATCH_DELAY）。
 
@@ -31,7 +31,7 @@ from play.record import Recorder
 from play.game import (HUMAN, MONEY_PER_TAI, SEAT_NAMES, WATCH_NAMES, WIND_NAMES, HandSummary, HumanSeat,
                        describe_action, play_round, score_lines, seat_policy)
 
-MODEL = "models/rl3_0960.pt"
+MODEL = "models/guard_plain.pt"
 WIDTH, HEIGHT = 1400, 900
 DISCARD_DELAY = 1.0
 """電腦輪到打牌時，從開始想到打出至少等這麼久（使用者 10/21 要求，2 秒→1 秒）。"""

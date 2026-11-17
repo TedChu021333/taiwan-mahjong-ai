@@ -2,7 +2,7 @@
 
     python -m web.build            # 組 site：網頁、牌面圖、模型權重、瀏覽器裡要跑的 Python 原始碼（py.zip）
     python -m web.build --tiles    # 另外從 train/templates 重新匯出牌面圖到 web/tiles（要有遊戲截圖模板）
-    python -m web.build --model    # 另外從 models/rl3_0960.pt 重新匯出 web/model.npz（要 PyTorch）
+    python -m web.build --model    # 另外從 models/guard_plain.pt 重新匯出 web/model.npz（要 PyTorch）
     python -m web.build --serve    # 組完在 http://localhost:8000 開起來試
 
 牌面圖（web/tiles）和權重（web/model.npz）都放進版控，GitHub Actions 組 site 時不需要 PyTorch 和遊戲截圖。
@@ -59,7 +59,7 @@ def normalize_white(image):
 def export_model() -> None:
     from training.numpy_model import export
 
-    export(ROOT / "models" / "rl3_0960.pt", WEB / "model.npz")
+    export(ROOT / "models" / "guard_plain.pt", WEB / "model.npz")
     print(f"已匯出 {WEB / 'model.npz'}")
 
 
