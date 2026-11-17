@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-MODEL = "models/rl3_0960.pt"
+MODEL = "models/guard_plain.pt"
 
 MENU = [
     ("麻將：自動模式", ["-m", "hint", "--auto", "--ai", "nn", "--model", MODEL,
@@ -23,6 +23,9 @@ MENU = [
     ("麻將：今天戰績", ["-m", "eval.stats"]),
     ("麻將：自己 vs 三家電腦（一圈）", ["-m", "play", "--model", MODEL]),
     ("麻將：四家電腦互打（手牌全開）", ["-m", "play", "--model", MODEL, "--watch"]),
+    # 六秒版（11/17）：打牌前把網路前幾名模擬到局末比較，每手出牌時整台電腦約滿載 3.5 秒；只在 6 秒場用
+    ("麻將：自動模式（6 秒場，出牌前模擬）", ["-m", "hint", "--auto", "--ai", "nn", "--model", MODEL,
+                                          "--efficiency-turns", "6", "--move-seconds", "6", "--search"]),
 ]
 
 

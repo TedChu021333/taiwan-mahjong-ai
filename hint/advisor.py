@@ -384,6 +384,26 @@ def use_network(path: str, efficiency_turns: int = 0, guard: bool = True) -> Non
     _network = NetworkPolicy.from_file(path, efficiency_turns=efficiency_turns, guard=guard)
 
 
+_searcher = None
+_search_seconds = 0.0
+SEARCH_OVERHEAD = 2.5
+"""六秒版每手限時中留給辨識（輪到自己後約 0.3～0.5 秒才讀到）、網路＋護欄、點擊的秒數：6 秒場模擬 3.5 秒。"""
+
+
+def use_search(path: str, workers: int, move_seconds: float) -> None:
+    """六秒版（--search）：打牌時把網路前幾名模擬到局末比較（agent.net_search）。要先 use_network。
+    會開一個 GPU 推論程序與 workers 個模擬程序，每手出牌時整台電腦約滿載 move_seconds − SEARCH_OVERHEAD 秒。"""
+    from agent.net_search import Searcher
+
+    global _searcher, _search_seconds
+    _searcher = Searcher(path, workers)
+    _search_seconds = max(0.0, move_seconds - SEARCH_OVERHEAD)
+
+
+def search_seconds() -> float:
+    return _search_seconds if _searcher is not None else 0.0
+
+
 def last_note() -> str | None:
     """上一個決定被網路的 guard 改掉的原因（沒有就是 None）。"""
     return _network.last_note if _policy == "nn" and _network is not None else None
@@ -450,6 +470,10 @@ def decide(observation: Observation, rng: Random | None = None) -> Action | None
     if _policy == "nn":
         if _network is None:
             raise RuntimeError("--ai nn 需要先 use_network(權重檔)")
+        if _searcher is not None:
+            from agent.net_search import decide as search_decide
+
+            return search_decide(_network, _searcher, state, ME, rng or Random(0), _search_seconds)[0]
         return _network(state, ME, rng or Random(0))
     if _policy == "ev":
         from agent.ev_agent import choose_ev_action_for_player

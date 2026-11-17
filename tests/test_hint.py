@@ -995,3 +995,42 @@ def test_empty_hand_row_starts_a_new_hand(monkeypatch):
                   hand_on_screen=lambda frame: False)
     assert rivers.resets == 1
     assert any("新的一局（手牌那排空了" in line for line in lines)
+
+
+def test_slow_decision_waits_for_a_fresh_frame_before_clicking(monkeypatch):
+    # 六秒版每手想約 3.5 秒：想完時手上的畫面已經舊了（10/28 照舊畫面點，牌只點起來），
+    # 下一幀還是同一手牌就沿用決定、用新畫面點；不重新決定
+    import hint.__main__ as hint_main
+    from game.rules import Action, ActionType
+
+    now = [0.0]
+    hand = Observation(T("11223789m99m4p56779s1z"), None, None, ())
+    calls, clicked = [], []
+
+    def slow_decide(observation):
+        calls.append(observation)
+        now[0] += 3.5
+        return Action(ActionType.DISCARD, tile=parse("1z")[0])
+
+    class Recorder:
+        def follow_up(self, observation):
+            return False
+
+        def perform(self, action, observation):
+            clicked.append(now[0])
+            return True
+
+        def click(self, point):
+            pass
+
+    def frames():
+        for i in range(3):
+            now[0] += 0.1
+            yield str(i), hand
+
+    monkeypatch.setattr(hint_main, "decide", slow_decide)
+    hint_main.run(frames(), readers=None, observe_fn=lambda frame, readers: frame,
+                  actuator=Recorder(), clock=lambda: now[0], show=lambda advice: None,
+                  save_result=lambda frame, prefix="": prefix, log=lambda *args, **kwargs: None)
+    assert len(calls) == 1
+    assert len(clicked) == 1 and clicked[0] > 3.6  # 第一幀（想之前的畫面）沒點，第二幀才點

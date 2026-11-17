@@ -149,6 +149,10 @@ DECLARED_NAMES = {"left": "上家", "top": "對家", "right": "下家"}
 CLAIM_SOURCE_NAMES = DECLARED_NAMES
 
 
+SLOW_DECISION_SECONDS = 0.5
+"""決定花超過這麼久（六秒版模擬約 3.5 秒），這一幀先不點，等下一幀新的畫面。"""
+
+
 def decision_key(observation) -> tuple:
     """決定只跟這些有關；一樣就沿用上次的決定。金牌、選起的牌、牌河等每幀會跳動的辨識不算：10/28 16:24、16:39
     手牌沒變，「聽」標記漏認一幀、或別家多打一張，網路的選擇就在南／四筒、九筒／二條之間換（使用者要求解決）。
@@ -204,6 +208,8 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
     last_claim = None
     """(最近讀到的放大牌, 時間)。"""
     decided_for = decided_action = decided_note = None
+    stale_decision = False
+    """這一手想了超過 SLOW_DECISION_SECONDS（六秒版模擬）：手上的畫面是想之前的，先不點，等下一幀確認。"""
     stuck_for = None
     win_pressed_at = float("-inf")
     own_kong_at = float("-inf")
@@ -532,7 +538,11 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
                     pending_claim = None
             # 同一個畫面只決定一次：蒙地卡羅 AI 每次要約 2 秒且有隨機性，重算會讓建議閃動
             if decision_key(observation) != decided_for:
+                thinking_from = clock()
                 decided_for, decided_action = decision_key(observation), decide(observation)
+                # 想太久時這一幀已經是舊畫面：10/28 模擬版想 4 秒後照舊畫面點，牌只點起來、已經不是自己的回合。
+                # 下一幀的手牌、按鈕沒變（decision_key 一樣）就沿用這個決定、用新畫面點；變了就重新決定
+                stale_decision = clock() - thinking_from > SLOW_DECISION_SECONDS
                 if decided_action is not None and decided_action.kind == ActionType.KONG:
                     own_kong_at = clock()
                 decided_note = last_note()
@@ -567,6 +577,9 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
             if (not observation.my_turn and not observation.buttons) or                     (observation.my_turn and (actuator is None or action is None)):
                 update_table(observation)
             if actuator is None or action is None:
+                continue
+            if stale_decision:
+                stale_decision = False
                 continue
             if observation == acted_for:
                 if retries >= MAX_RETRIES and clock() - acted_at >= RETRY_AFTER \
@@ -629,7 +642,7 @@ def main() -> None:
                         help="打牌 AI：rule 規則式（預設）、ev 期望值打牌（估計放槍風險）、"
                              "mc 蒙地卡羅（模擬比較，每步約 2 秒）、nn 學習型（需要 PyTorch，"
                              "用 .venv-train/Scripts/python 執行）")
-    parser.add_argument("--model", default="models/rl3_0960.pt", help="--ai nn 用的網路權重")
+    parser.add_argument("--model", default="models/guard_plain.pt", help="--ai nn 用的網路權重")
     parser.add_argument("--efficiency-turns", type=int, default=0,
                         help="--ai nn 前幾手湊牌優先（同向聽時改打進張最多的牌）；0 = 照網路")
     parser.add_argument("--raw-network", action="store_true",
@@ -639,6 +652,10 @@ def main() -> None:
                              "每手出牌時整台電腦滿載，10/3 出牌點了沒反應 34 次）")
     parser.add_argument("--move-seconds", type=float, default=3.0,
                         help="遊戲每手限時（秒）；3 秒場模擬約 1 秒，6 秒場給 6，模擬約 4 秒")
+    parser.add_argument("--search", action="store_true",
+                        help="六秒版（要 --ai nn 與 --move-seconds 6）：打牌時把網路前幾名模擬到局末比較，"
+                             "每手出牌時整台電腦約滿載 3.5 秒")
+    parser.add_argument("--search-workers", type=int, default=10, help="六秒版的模擬程序數")
     parser.add_argument("--record", nargs="?", type=Path, const=True, default=None, metavar="檔案",
                         help="把畫面連同提示與放槍表錄成 mp4（預設 result/錄影_<時間>.mp4）；小視窗本身螢幕錄影錄不到")
     parser.add_argument("--demo-overlay", action="store_true",
@@ -647,6 +664,16 @@ def main() -> None:
     use_policy(args.ai)
     if args.ai == "nn":
         use_network(args.model, args.efficiency_turns, guard=not args.raw_network)
+    if args.search:
+        if args.ai != "nn":
+            raise SystemExit("--search 要搭配 --ai nn")
+        if args.move_seconds < 5:
+            raise SystemExit("--search 只在 6 秒場用（加 --move-seconds 6）；3 秒場來不及模擬")
+        from hint.advisor import search_seconds, use_search
+
+        print(f"六秒版：啟動 {args.search_workers} 個模擬程序與 GPU 推論程序…", flush=True)
+        use_search(args.model, args.search_workers, args.move_seconds)
+        print(f"六秒版：每手打牌前模擬 {search_seconds():g} 秒", flush=True)
     if args.ai == "mc":
         import os
         from multiprocessing import Pool
