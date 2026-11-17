@@ -26,7 +26,8 @@ from agent.rule_agent import (
     visible_tile_counts,
 )
 from agent.safety import claim_is_worse, safer_discard
-from agent.shanten import effective_tiles, improvement_count, next_step_outs, shanten
+from agent.shanten import (effective_tiles, improvement_count, nearby_tiles, next_step_outs, shanten,
+                           shape_improvement_count)
 from game.rules import Action, ActionType, GameState, Phase, legal_actions
 from game.tiles import is_honor, is_suited, suit_of, tile_name
 from training.actions import DISCARD, legal_mask
@@ -277,7 +278,12 @@ def wasteful_discard(state: GameState, player: int, choice: Action, lookup: dict
         return None
     top = max(scored[tile][1] for tile in same)
     if (outs >= top * WASTE_TENPAI_SHARE) if level == 0 else (top - outs < WASTE_OUTS):
-        return None if level == 0 else _better_shape(state, player, choice, lookup, same, scored, outs, visible)
+        if level == 0:
+            return None
+        gold = [tile for tile in options if tile != choice.tile and tile not in scored]  # 用得上的金牌：比牌型時也列入
+        scored.update({tile: evaluate(tile) for tile in gold})
+        return _better_shape(state, player, choice, lookup,
+                             same + [tile for tile in gold if scored[tile][0] == level], scored, outs, visible)
     best = [tile for tile in same if scored[tile][1] == top]
     pick = min(best, key=lambda tile: (keep_value(me.hand, tile, state.gold_tiles), -float(logits[DISCARD + tile])))
     word = "聽" if level == 0 else "進張"
@@ -308,11 +314,49 @@ def _better_shape(state: GameState, player: int, choice: Action, lookup: dict[in
                 or (tile >= 27 and me.hand[tile] == 1 and improve > base_improve)):
             better.append((next_outs, improve, -keep_value(me.hand, tile, state.gold_tiles), tile))
     if not better:
-        return None
+        return _deeper_shape(state, player, choice, lookup, candidates, outs, visible, scored,
+                             base_next, base_improve, shape)
     next_outs, improve, _, pick = max(better)
     return (lookup[DISCARD + pick],
             f"牌型：打{tile_name(choice.tile)}改良牌 {base_improve}、牌型 {base_next} → "
             f"改打{tile_name(pick)} {improve}、{next_outs}")
+
+
+SHAPE_DEEP_MARGIN = 4
+"""進張、牌型、改良牌全都一樣時，含牌型的改良牌（shape_improvement_count）多這麼多張以上就改打。"""
+SHAPE_DEEP_CANDIDATES = 3
+"""全平手的牌最多比這麼多張（依孤立程度，最孤立的先比）。"""
+
+
+def _deeper_shape(state: GameState, player: int, choice: Action, lookup: dict[int, Action], candidates: list[int],
+                  outs: int, visible: list[int], scored: dict[int, tuple[int, int]], base_next: int, base_improve: int,
+                  shape) -> tuple[Action, str] | None:
+    """進張、牌型、改良牌全都和網路那張一樣的牌，比「摸到後牌型變好」的改良牌（每張約 0.2～0.5 秒，只在全平手時算）。
+    11/18 01:27 一二四條（一條是用得上的金牌）網路打四條，使用者：胡牌大於金牌，留四進五就能等雙頭。"""
+    me = state.players[player]
+    tied = sorted((tile for tile in candidates if scored[tile][1] == outs and shape(tile) == (base_next, base_improve)),
+                  key=lambda tile: keep_value(me.hand, tile, state.gold_tiles))
+    if not tied:
+        return None
+
+    def deep(tile: int, draws: list[int]) -> int:
+        hand = list(me.hand)
+        hand[tile] -= 1
+        return shape_improvement_count(hand, me.open_melds, visible, draws)
+
+    best = None
+    for tile in tied[:SHAPE_DEEP_CANDIDATES]:  # 只比兩張附近的摸牌（其他摸牌兩邊差不多），每對約 0.05～0.2 秒
+        draws = nearby_tiles([choice.tile, tile])
+        base_deep, deep_value = deep(choice.tile, draws), deep(tile, draws)
+        if deep_value - base_deep >= SHAPE_DEEP_MARGIN:
+            key = (deep_value - base_deep, -keep_value(me.hand, tile, state.gold_tiles), tile, base_deep, deep_value)
+            best = max(best, key) if best else key
+    if best is None:
+        return None
+    _, _, pick, base_deep, deep_value = best
+    return (lookup[DISCARD + pick],
+            f"牌型：打{tile_name(choice.tile)}和打{tile_name(pick)}進張、改良牌都一樣，"
+            f"附近摸到後牌型變好的牌 {base_deep} → {deep_value} 張，改打{tile_name(pick)}")
 
 
 FLUSH_MIN_TILES = 13

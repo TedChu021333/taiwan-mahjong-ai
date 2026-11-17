@@ -249,6 +249,60 @@ def improvement_count(counts: Sequence[int], n_open_melds: int, visible: Sequenc
     return total
 
 
+def shape_improvement_count(counts: Sequence[int], n_open_melds: int, visible: Sequence[int],
+                            draws: Sequence[int] | None = None) -> int:
+    """改良牌（含牌型）：摸到後（再打掉一張）向聽數不變，而且有效進張變多、或進張一樣但牌型（next_step_outs）變好的牌，
+    回傳看不到的張數。improvement_count 只看進張：11/18 01:27 三萬 五五萬 八八萬 二三四四筒 六七八筒 一二四條 七八條，
+    打一條留二四條、打四條留一二條，進張、改良牌、牌型全都一樣——摸五條變四五條兩面，等的三六條和七八條的六九條
+    種類重複、進張沒變多，但湊完一組後剩兩面 8 張而不是嵌張 4 張（使用者：留四進五就能等雙頭）。
+    draws：只看這些摸牌（比兩張候選時只有它們附近的摸牌會不一樣，全部算一手要 0.2～0.5 秒）。"""
+    hand = list(counts)
+    level = shanten(hand, n_open_melds)
+    effective = set(effective_tiles(hand, n_open_melds))
+    base = (sum(max(0, 4 - visible[tile]) for tile in effective), next_step_outs(hand, n_open_melds, visible))
+    total = 0
+    for drawn in (range(len(hand)) if draws is None else draws):
+        live = 4 - visible[drawn]
+        if live <= 0 or drawn in effective or hand[drawn] >= 4:
+            continue
+        hand[drawn] += 1
+        seen = list(visible)
+        seen[drawn] += 1
+        better = False
+        for discard in range(len(hand)):
+            if not hand[discard] or discard == drawn:
+                continue
+            hand[discard] -= 1
+            if shanten(hand, n_open_melds) == level:
+                outs = sum(max(0, 4 - seen[tile]) for tile in effective_tiles(hand, n_open_melds))
+                better = outs > base[0] or (outs == base[0] and
+                                            _next_step_cached(tuple(hand), n_open_melds, tuple(seen)) > base[1])
+            hand[discard] += 1
+            if better:
+                break
+        hand[drawn] -= 1
+        if better:
+            total += live
+    return total
+
+
+def nearby_tiles(tiles: Sequence[int]) -> list[int]:
+    """這些牌前後兩格內的同色數牌（字牌只有自己）。"""
+    near: set[int] = set()
+    for tile in tiles:
+        if is_suited(tile):
+            near.update(other for other in range(tile - 2, tile + 3) if other // 9 == tile // 9 and 0 <= other < 27)
+        else:
+            near.add(tile)
+    return sorted(near)
+
+
+@lru_cache(maxsize=50_000)
+def _next_step_cached(counts: tuple[int, ...], n_open_melds: int, visible: tuple[int, ...]) -> int:
+    """shape_improvement_count 用：比較同一手的幾張候選時，「打 a 摸 d 再打 b」和「打 b 摸 d 再打 a」是同一手。"""
+    return next_step_outs(counts, n_open_melds, visible)
+
+
 def next_step_outs(counts: Sequence[int], n_open_melds: int, visible: Sequence[int]) -> int:
     """牌型分數（往後多看一步）：每張有效進張摸到後、再打最好的一張，剩下的有效進張有幾張，
     依那張進張看不到的張數加權加總。進張、改良牌都一樣時用來分出牌型好壞：

@@ -333,6 +333,28 @@ def test_same_outs_but_clearly_worse_shape_is_switched():
     assert wasteful_discard(state, 0, Action(ActionType.DISCARD, tile=parse("1s")[0]), lookup, logits) is None
 
 
+def test_full_tie_keeps_the_kanchan_that_can_become_two_sided_even_over_gold():
+    pytest.importorskip("torch")
+    import time
+
+    from agent.nn_agent import wasteful_discard
+    from training.actions import legal_mask
+
+    # 11/18 01:27：三萬 五五萬 八八萬 二三四四筒 六七八筒 一二四條 七八條（一條是金牌），網路打四條。
+    # 打一條、打四條進張、改良牌、牌型全一樣；留二四條摸五條變四五條兩面（使用者：胡牌大於金牌）
+    players = [PlayerState() for _ in range(4)]
+    players[0].hand = to_counts(parse("35588m2344678p12478s"))
+    state = GameState([0] * 60, players, phase=Phase.DISCARD, last_drawn=parse("4s")[0],
+                      gold_tiles=parse("1s1m5z"))
+    _, lookup = legal_mask(legal_actions(state, 0))
+    logits = np.zeros(108, dtype=np.float32)
+    started = time.time()
+    action, note = wasteful_discard(state, 0, Action(ActionType.DISCARD, tile=parse("4s")[0]), lookup, logits)
+    assert action.tile == parse("1s")[0] and "改打一條" in note
+    assert time.time() - started < 3
+    assert wasteful_discard(state, 0, Action(ActionType.DISCARD, tile=parse("1s")[0]), lookup, logits) is None
+
+
 def test_isolated_honor_goes_before_breaking_a_pair_shape():
     pytest.importorskip("torch")
     from agent.nn_agent import wasteful_discard
