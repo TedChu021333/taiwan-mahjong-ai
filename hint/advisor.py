@@ -24,6 +24,7 @@ from perception.hand_reader import (
     _cell_box,
     drawn_tile_box,
     fill_covered_tops,
+    fill_dimmed,
     lower_part_classifier,
     read_hand,
 )
@@ -128,6 +129,8 @@ def observe(image: np.ndarray, readers: Readers) -> Observation | None:
     if reading.tiles and not reading.complete and buttons is not None:
         # 「上家出牌，不可明槓。」蓋住手牌上緣：認不出的牌改用下半部再認
         reading = fill_covered_tops(image, reading, readers.lower)
+        if not reading.complete and buttons & {"chow", "pung", "kong"}:
+            reading = fill_dimmed(image, reading, readers.tiles)  # 吃碰按鈕亮著：不能用的牌變暗、分數變低
     if not reading.tiles or not reading.complete or len(reading.tiles) % 3 == 0:
         return None
     if not _consistent_layout(reading.boxes):

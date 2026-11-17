@@ -1034,3 +1034,32 @@ def test_slow_decision_waits_for_a_fresh_frame_before_clicking(monkeypatch):
                   save_result=lambda frame, prefix="": prefix, log=lambda *args, **kwargs: None)
     assert len(calls) == 1
     assert len(clicked) == 1 and clicked[0] > 3.6  # 第一幀（想之前的畫面）沒點，第二幀才點
+
+
+def test_dimmed_tiles_are_read_while_claim_buttons_are_lit():
+    # 實戰 11/18 02:11～02:15：吃碰按鈕亮著時最左邊變暗的二萬只有 0.74，整手讀不到、7 次吃碰都沒處理
+    path = TRAIN_DIR / "經典_吃碰_變暗二萬.png"
+    if not path.exists():
+        pytest.skip("缺少訓練截圖")
+    observation = observe(read_image(path), Readers())
+    assert observation is not None and observation.hand == T("246778m47888p1159s5z")
+    assert observation.buttons == frozenset({"chow"})
+
+
+def test_fill_dimmed_needs_a_clear_lead():
+    import numpy as np
+
+    from perception.hand_reader import HandReading, fill_dimmed
+
+    class Fake:
+        def __init__(self, scores):
+            self.table = scores
+
+        def scores(self, image):
+            return self.table
+
+    image = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    reading = HandReading(((0, 0, 10, 10), (10, 0, 20, 10)), (None, 5), (0.74, 0.95))
+    assert fill_dimmed(image, reading, Fake({1: 0.74, 2: 0.52})).tiles == (1, 5)
+    assert fill_dimmed(image, reading, Fake({1: 0.74, 2: 0.66})).tiles == (None, 5)  # 領先不夠
+    assert fill_dimmed(image, reading, Fake({1: 0.65, 2: 0.30})).tiles == (None, 5)  # 分數太低

@@ -303,6 +303,24 @@ def fill_covered_tops(image: np.ndarray, reading: HandReading,
     return HandReading(reading.boxes, tuple(tiles), tuple(scores))
 
 
+DIMMED_MIN_SCORE = 0.70
+DIMMED_MIN_LEAD = 0.15
+"""吃碰按鈕亮著時不能吃碰的手牌會變暗，分數掉到 0.7 多。11/18 02:11～02:15 最左邊變暗的二萬只有 0.74～0.77
+（第二名 0.52～0.54），整手讀不到、吃碰按鈕亮著 7 次都沒處理。按鈕亮著時，認不出的牌最高分到這個門檻、
+又領先第二名（不同的牌）這麼多就採用（錯的牌最高約 0.74，但不會這樣大幅領先）。"""
+
+
+def fill_dimmed(image: np.ndarray, reading: HandReading, classifier: TileClassifier) -> HandReading:
+    """認不出的牌放寬門檻再認一次（只在吃碰按鈕亮著、手牌變暗時用）。"""
+    tiles, scores = list(reading.tiles), list(reading.scores)
+    for index, (box, tile) in enumerate(zip(reading.boxes, reading.tiles)):
+        if tile is None:
+            ranked = sorted(classifier.scores(crop_tile(image, box)).items(), key=lambda item: -item[1])
+            if len(ranked) >= 2 and ranked[0][1] >= DIMMED_MIN_SCORE and ranked[0][1] - ranked[1][1] >= DIMMED_MIN_LEAD:
+                tiles[index], scores[index] = ranked[0]
+    return HandReading(reading.boxes, tuple(tiles), tuple(scores))
+
+
 def format_reading(reading: HandReading) -> str:
     parts = [
         f"{tile_name(tile)}({score:.2f})" if tile is not None else f"??({score:.2f})"
