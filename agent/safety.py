@@ -127,16 +127,31 @@ def safer_discard(state: GameState, player: int, tile: int, rng: Random,
     choices = evaluate(state, player, me.hand, me.melds, candidates, danger.expected_loss,
                        danger.probability, calibration)
     current = choices[tile]
+    keep = _keep_shanten(current, choices)
     safer = [c for c in choices.values() if c.danger < current.danger
              and not (c.level > current.level and current.level <= KEEP_SHANTEN
                       and current.danger <= RETREAT_MIN_DANGER)]
-    if not safer:
-        return tile, None
     worth = [c for c in safer if _gain(current, c) > _margin(current, c)]
-    if not worth:
+    best = max(worth, key=lambda c: _gain(current, c)) if worth else None
+    if keep is not None and (best is None or keep.net > best.net):
+        return keep.tile, (f"有人宣告，{tile_name(current.tile)}退成 {current.level} 向聽（淨值 {current.net:.2f}）→ "
+                           f"改打{tile_name(keep.tile)}保持 {keep.level} 向聽（放槍 {keep.danger:.1%}，淨值 {keep.net:.2f}）")
+    if best is None:
         return tile, None
-    best = max(worth, key=lambda c: _gain(current, c))
     return best.tile, _describe(current, best)
+
+
+def _keep_shanten(current: Choice, choices: dict[int, Choice]) -> Choice | None:
+    """網路那張打完向聽變差、別的牌能保持最好的向聽，而且淨值高 OVERRIDE_MARGIN 以上：改打那張（淨值最高的）。
+    11/18 02:10 一二三萬 五萬 二三四六筒 一三條 六七條 東東（對家聽牌）網路打一條退成兩向聽，原本只在比一條安全的牌裡挑，
+    改打東拆了對子；打五萬、六筒保持一向聽，淨值 1.23、1.15，東 0.94、一條 0.68（使用者：可以打六筒卻拆東風對子）。"""
+    level = min(choice.level for choice in choices.values())
+    if current.level <= level:
+        return None
+    keep = max((choice for choice in choices.values() if choice.level == level), key=lambda choice: choice.net)
+    if keep.danger > RETREAT_MIN_DANGER:  # 和退向聽同一條線：放槍超過 20% 的牌不為了保向聽硬打（11/2 04:26 七條 27.8%）
+        return None
+    return keep if keep.net - current.net > OVERRIDE_MARGIN else None
 
 
 def _margin(current: Choice, other: Choice) -> float:

@@ -228,3 +228,32 @@ def test_efficiency_prefers_shape_over_improvement_count():
     _, lookup = legal_mask(legal_actions(state, 0))
     action = efficient_discard(state, 0, Action(ActionType.DISCARD, tile=P("5p")), lookup, np.zeros(200), turns=6)
     assert action == Action(ActionType.DISCARD, tile=P("1m"))
+
+
+def test_network_retreat_is_replaced_by_a_tile_that_keeps_the_shanten(monkeypatch):
+    import agent.safety as safety
+    from agent.opponent_model import Danger
+    from agent.shanten import shanten
+
+    # 11/18 02:10：網路打掉對子退向聽、別的牌能保持一向聽而淨值明顯較高時，改打保持向聽的牌
+    state = state_with("123m456p789s2367s9p115z")
+    state.declared[1] = True
+    hand = state.players[0].hand
+
+    def keeps(tile):
+        after = list(hand)
+        after[tile] -= 1
+        return shanten(after, 0) <= 1
+
+    def patch(risk):
+        probability = {t: (risk if hand[t] and keeps(t) else 0.0) for t in range(34)}
+        monkeypatch.setattr(safety, "estimate_danger", lambda *args, **kwargs: Danger(
+            probability, {t: p * 10 for t, p in probability.items()}))
+
+    assert not keeps(P("1z"))
+    patch(0.05)
+    tile, note = safer_discard(state, 0, P("1z"), Random(0))
+    assert keeps(tile) and "保持" in note
+    patch(0.25)  # 保持向聽的牌放槍超過 20%：不硬打
+    tile, note = safer_discard(state, 0, P("1z"), Random(0))
+    assert not keeps(tile)

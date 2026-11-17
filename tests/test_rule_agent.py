@@ -289,11 +289,18 @@ def test_swap_prefers_non_gold_tiles_but_may_give_away_an_isolated_gold():
     # 9/29 21:12 那局的起手：金牌是一條、南、西。沒有金牌時會換掉孤張的南、西
     hand = C("22238m23458p35689s23z")
     assert set(choose_swap_tiles(hand)) >= set(parse("23z"))
-    # 有金牌時先換非金牌；孤張金牌多付 GOLD_SWAP_COST，最多送出一張（10/20 使用者同意：孤張金牌字牌
-    # 很難湊成牌型，換掉讓起手牌較快成形；原本各張分開評估時南、西都留著）
+    # 孤張金牌只多付一點（GOLD_SWAP_COST 0.05，11/18 使用者：孤張金牌照樣換）；用得上的一條不換
     swapped = choose_swap_tiles(hand, gold_tiles=parse("1s23z"))
-    assert len(swapped) == 3 and swapped[0] not in parse("1s23z")
-    assert len(set(swapped) & set(parse("1s23z"))) <= 1
+    assert len(swapped) == 3 and P("1s") not in swapped and set(swapped) & set(parse("23z"))
+
+
+def test_swap_gives_away_isolated_honors_before_breaking_a_pair_shape():
+    from agent.rule_agent import choose_swap_tiles
+
+    # 11/18 02:11：二四六七七八萬 七八筒 一一二條 五條 九條 東發中（金牌五筒、中、一條），原本換東、發、二條
+    hand = C("246778m78p11259s156z")
+    swapped = choose_swap_tiles(hand, gold_tiles=parse("5p5z1s"), valued_honors=range(27, 34), samples=800)
+    assert set(swapped) == set(parse("156z"))
 
 
 def test_tenpai_prefers_the_wait_with_more_live_tiles():
