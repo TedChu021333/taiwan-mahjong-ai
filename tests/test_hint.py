@@ -1063,3 +1063,15 @@ def test_fill_dimmed_needs_a_clear_lead():
     assert fill_dimmed(image, reading, Fake({1: 0.74, 2: 0.52})).tiles == (1, 5)
     assert fill_dimmed(image, reading, Fake({1: 0.74, 2: 0.66})).tiles == (None, 5)  # 領先不夠
     assert fill_dimmed(image, reading, Fake({1: 0.65, 2: 0.30})).tiles == (None, 5)  # 分數太低
+
+
+def test_letterboxed_game_is_detected():
+    # 11/18 01:09：遊戲沒有全螢幕、四周黑框，座標全偏掉（還誤按了一次胡）
+    from hint.__main__ import letterboxed
+
+    path = TRAIN_DIR / "經典_沒有全螢幕.png"
+    normal = TRAIN_DIR / "經典_不可明槓.png"
+    if not path.exists() or not normal.exists():
+        pytest.skip("缺少訓練截圖")
+    assert letterboxed(read_image(path))
+    assert not letterboxed(read_image(normal))

@@ -183,6 +183,25 @@ def video_frames(path: Path, step: float, start: float) -> Iterator[tuple[str, n
         index += 1
 
 
+LETTERBOX_EDGE = (40, 70)
+"""(上緣列數, 左緣行數)：遊戲沒有全螢幕時四周是黑框（11/18 01:09 解析度切到 1920×1080 後遊戲視窗縮成約 x 85～1835、
+y 48～1032），所有座標都偏掉，讀不到手牌，還在讀不到手牌時誤認「胡」亮著按了一次。全螢幕時左上角是藍色的「代打」圖示。"""
+LETTERBOX_WARN_SECONDS = 30.0
+
+
+def letterboxed(frame: np.ndarray) -> bool:
+    """畫面上緣與左緣全黑、中間有東西：遊戲沒有填滿螢幕。"""
+    if not isinstance(frame, np.ndarray) or frame.ndim != 3:
+        return False
+    rows, cols = LETTERBOX_EDGE
+    height, width = frame.shape[:2]
+    if height < 4 * rows or width < 4 * cols:
+        return False
+    top, left = frame[:rows // 2], frame[:, :cols // 2]
+    middle = frame[height // 3:2 * height // 3, width // 3:2 * width // 3]
+    return float(top.max()) < 25 and float(left.max()) < 25 and float(middle.max()) > 100
+
+
 def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
         actuator=None, observe_fn=observe, clock=time.monotonic, show=None,
         find_continue=None, save_result=save_result, log=print_log, rivers=None,
@@ -243,6 +262,7 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
     table_at = float("-inf")
     kong_shots = KongShots()
     meld_shots_left = MELD_SHOT_LIMIT
+    letterbox_warned_at = float("-inf")
 
     def update_table(observation) -> None:
         nonlocal table_for, table_at
@@ -271,6 +291,14 @@ def run(frames: Iterator[tuple[str, np.ndarray]], readers: Readers,
             log(f"[{stamp}] 按了 Esc，打完這圈後停止（要立刻停再按一次 Esc）")
             if show is not None:
                 show("打完這圈後停止")
+        if letterboxed(frame):  # 座標全偏了：什麼都不點，提醒使用者按 F11
+            if clock() - letterbox_warned_at >= LETTERBOX_WARN_SECONDS:
+                letterbox_warned_at = clock()
+                log(f"[{stamp}] 遊戲畫面四周有黑框、沒有填滿螢幕（Google Play Games 按 F11 全螢幕），先不動作")
+                if show is not None:
+                    show("遊戲沒有全螢幕（按 F11）")
+            game_seen_at = clock()
+            continue
         try:
             if stuck_shots_left and clock() - stuck_shot_at >= STUCK_SHOT_INTERVAL:
                 stuck_shots_left -= 1
