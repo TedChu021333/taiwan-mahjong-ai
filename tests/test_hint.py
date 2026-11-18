@@ -137,7 +137,7 @@ def test_loop_saves_a_screenshot_when_it_wants_to_win_but_the_win_button_is_not_
     now = [0.0]
 
     def frames():
-        for step in range(6):
+        for step in range(8):
             now[0] = step * 1.0
             yield str(step), screen
 
@@ -1075,3 +1075,46 @@ def test_letterboxed_game_is_detected():
         pytest.skip("缺少訓練截圖")
     assert letterboxed(read_image(path))
     assert not letterboxed(read_image(normal))
+
+
+def test_on_table_tells_the_lobby_from_the_game():
+    # 11/18 09:01 打完回到大廳：大廳下緣被當成手牌那排有牌，存了一張大廳的「讀不到」截圖
+    from hint.__main__ import on_table
+
+    paths = {name: TRAIN_DIR / f"經典_{name}.png" for name in ("大廳", "小結算", "換三張", "不可明槓")}
+    if not all(path.exists() for path in paths.values()):
+        pytest.skip("缺少訓練截圖")
+    assert not on_table(read_image(paths["大廳"]))
+    assert not on_table(read_image(paths["小結算"]))
+    assert on_table(read_image(paths["換三張"]))
+    assert on_table(read_image(paths["不可明槓"]))
+    assert on_table(None)  # 測試用的假畫面不擋
+
+
+def test_win_button_missing_for_one_frame_is_not_reported(monkeypatch):
+    import hint.__main__ as hint_main
+    from game.rules import Action
+
+    # 11/18 04:32:56 摸到自摸的那一幀「胡」還沒亮，下一幀就按到了
+    screen = Observation(T("234p666p77s55z7s"), frozenset({"declare"}), None, ())
+    monkeypatch.setattr(hint_main, "decide", lambda observation: Action(ActionType.WIN))
+
+    class NoWinButton:
+        def follow_up(self, observation):
+            return False
+
+        def perform(self, action, observation):
+            return False
+
+    now = [0.0]
+
+    def frames():
+        for step in range(6):  # 手牌穩定後第一次按（第 4 秒）找不到，接著就進結算了
+            now[0] = step * 1.0
+            yield str(step), screen
+
+    saved = []
+    hint_main.run(frames(), readers=None, actuator=NoWinButton(), observe_fn=lambda frame, readers: frame,
+                  clock=lambda: now[0], save_result=lambda frame, prefix="": saved.append(prefix) or "x",
+                  log=lambda line, detail=None, echo=True: None)
+    assert saved == []
