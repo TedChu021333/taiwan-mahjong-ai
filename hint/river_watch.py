@@ -122,10 +122,11 @@ class RiverWatch:
         """推算某家加槓、等讀副露確認：(座位, 當時讀到他的槓數, 畫面上看到他的暗槓數, 當時讀副露的次數)。"""
         self._hidden_pending: tuple[str, int, int] | None = None
         """推算某家暗槓、等讀副露確認：(座位, 當時讀到的各家槓合計, 當時讀副露的次數)。"""
-        self._claimed_since_kong = False
-        """金牌變多之後牌河報過「被拿走」：是明槓。"""
-        self._claimed_tile_since_kong: int | None = None
-        """那張被拿走的牌（讀得出來時）。"""
+        self._claims_since_kong: list[tuple[str, int | None]] = []
+        """金牌變多之後牌河報過「被拿走」的 (座位, 那張牌)：有就是明槓。之後原位又出現（restored，只是被蓋住）就拿掉：
+        11/18～19 推算明槓 52 次有 23 次那張一秒內就回來了，留著會把之後讀到的同一種碰改成槓，真正的暗槓／加槓也不推算。"""
+        self._mover_before_claim: tuple[str, str] | None = None
+        """最近一次「被拿走」之前的 _last_mover：那張又回來時還原。"""
         self.open_kong_tiles: list[int] = []
         """推算被明槓的牌、還沒在副露裡標成槓的：之後哪一家讀到這種牌的碰，就改成槓（一種牌最多 4 張，碰只會在一家）。
         疊上去的第四張常讀不到，明槓原本一直算成碰（10/28 使用者：對手的槓都被當成碰）。"""
@@ -162,7 +163,8 @@ class RiverWatch:
         self.hidden_kongs = {seat: 0 for seat in SEATS}
         self._last_mover = self._kong_from = self._added_pending = self._hidden_pending = None
         self._added_done = None
-        self._claimed_tile_since_kong = None
+        self._claims_since_kong = []
+        self._mover_before_claim = None
         self.open_kong_tiles = []
         self._kong_seen = []
         self._kongs_explained = self._kong_baseline = 0
@@ -195,11 +197,11 @@ class RiverWatch:
             if event.seat == "me" and event.kind in ("discard", "claimed"):
                 self._own_pending = None
                 self._own_seen_at = self._frame
+            if event.kind == "claimed":
+                self._mover_before_claim = self._last_mover
+                self._claims_since_kong.append((event.seat, event.tile))
             if event.kind in ("discard", "claimed"):
                 self._last_mover = (event.seat, event.kind)
-            if event.kind == "claimed":
-                self._claimed_since_kong = True
-                self._claimed_tile_since_kong = event.tile
             if event.kind == "discard":
                 self._apply_label(frame, event)
                 self._save_unknown(frame, event)
@@ -215,6 +217,7 @@ class RiverWatch:
                     continue
                 self._taken_from = (event.seat, self._my_melds, event.tile)
             elif event.kind == "restored":
+                self._claim_restored(event.seat, event.tile)
                 if self._taken_from and self._taken_from[0] == event.seat:
                     self._taken_from = None
                 if self._credited and self._credited[0] == event.seat:
@@ -244,12 +247,23 @@ class RiverWatch:
         self._own_pending = self._banner = None
         self._own_seen_at = self._frame
         self._last_mover = ("me", "claimed")
-        self._claimed_since_kong = True
-        self._claimed_tile_since_kong = tile
+        self._claims_since_kong.append(("me", tile))
         self._credit("me", claimer, (tile, tile) if kind == "pung" and tile is not None else (), tile, kind)
         if tile is not None:
             self.unseen_claimed.append(tile)
         return RiverEvent("claimed_unseen", "me", tile, (0, 0, 0, 0))
+
+    def _claim_restored(self, seat: str, tile: int | None) -> None:
+        """被拿走的牌又回到原位（只是被蓋住）：不算金牌變多後的明槓，最近的事件也還原成拿走之前的。"""
+        if (seat, tile) in self._claims_since_kong:
+            self._claims_since_kong.reverse()
+            self._claims_since_kong.remove((seat, tile))
+            self._claims_since_kong.reverse()
+        if tile in self.open_kong_tiles:
+            self.open_kong_tiles.remove(tile)
+        if self._last_mover == (seat, "claimed"):
+            self._last_mover = self._mover_before_claim
+        self._mover_before_claim = None
 
     def _someone_discarded(self, seat: str) -> None:
         taken, self._taken_from = self._taken_from, None
@@ -312,8 +326,7 @@ class RiverWatch:
     def kong_started(self) -> None:
         """金牌剛變多（有人槓）：記下當時牌河最近的事件，槓的是那之後輪到的人。"""
         self._kong_from = self._last_mover
-        self._claimed_since_kong = False
-        self._claimed_tile_since_kong = None
+        self._claims_since_kong = []
         cutoff = self.clock() - RECENT_KONG_SECONDS
         earlier = next((total for seen, total in reversed(self._kong_seen) if seen <= cutoff), 0)
         self._kong_baseline = max(self._kongs_explained, earlier)
@@ -338,8 +351,8 @@ class RiverWatch:
             self._kongs_explained = self._kong_baseline + 1
             self.kong_notes.append("金牌變多前後讀到了新的槓，就是那一組，不另外推算")
             return None
-        if self._claimed_since_kong:
-            tile = self._claimed_tile_since_kong
+        if self._claims_since_kong:
+            tile = self._claims_since_kong[-1][1]
             if tile is not None and self.meld_watch is not None:
                 self.open_kong_tiles.append(tile)
                 self.kong_notes.append(f"金牌變多時{tile_name(tile)}被拿走：是明槓，讀到{tile_name(tile)}的碰就算槓")

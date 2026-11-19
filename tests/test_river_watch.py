@@ -432,6 +432,36 @@ def test_kong_right_after_a_claim_is_not_a_concealed_kong():
     assert watch.kong_confirmed() is None
 
 
+def test_claim_that_comes_back_after_the_gold_changed_is_not_an_exposed_kong():
+    # 11/18 17:31 上家暗槓時牌河報七筒被拿走、一秒後又回來：原本記成明槓七筒，之後讀到七筒的碰會被改成槓
+    from types import SimpleNamespace
+
+    reader = FakeReader()
+    watch, _ = watch_with(reader)
+    reader.current["top"] = [RiverTile(P("7p"), 0.9, (700, 200, 760, 280))]
+    frames(watch, waiting())                  # 對家打七筒
+    watch.kong_started()
+    reader.current["top"] = []
+    frames(watch, waiting())                  # 看起來被拿走
+    reader.current["top"] = [RiverTile(P("7p"), 0.9, (700, 200, 760, 280))]
+    frames(watch, waiting(), 1)               # 其實只是被蓋住
+    assert watch.kong_confirmed() == ("暗槓", "left")
+    assert watch.open_kong_tiles == []
+    # 確認之後才回來的也拿掉
+    watch.new_hand()
+    reader.current["top"] = [RiverTile(P("7p"), 0.9, (700, 200, 760, 280))]
+    frames(watch, waiting())
+    watch.meld_watch = SimpleNamespace(melds={}, concealed={}, reads=0, new_hand=lambda: None,
+                                       mark_kong=lambda tile: None)
+    watch.kong_started()
+    reader.current["top"] = []
+    frames(watch, waiting())
+    assert watch.kong_confirmed() is None and watch.open_kong_tiles == [P("7p")]
+    reader.current["top"] = [RiverTile(P("7p"), 0.9, (700, 200, 760, 280))]
+    frames(watch, waiting(), 1)
+    assert watch.open_kong_tiles == []
+
+
 def test_concealed_kongs_seen_on_screen_count_as_melds():
     from types import SimpleNamespace
 
