@@ -529,3 +529,25 @@ def test_network_does_not_claim_when_concealed_and_already_tenpai():
     players[0].hand = to_counts(parse("79m345p234s22244z"))
     players[0].melds = [Meld("chow", tuple(parse("789p")), from_player=3)]
     assert network_claim_is_worth(state, 0, pung)
+
+
+def test_wide_wait_with_no_live_tiles_is_not_declared():
+    # 11/20 18:28：吃三四五筒，二三四五五萬 一二三四四五六七八條 摸五條，打一條聽三條、六條、九條三種，
+    # 但三條、六條自己各一張、別家打出三張，九條對家碰了三張、自己打過一張：一張都等不到，原本照樣按聽
+    from agent.rule_agent import waits_worth_declaring
+    from game.rules import Meld
+
+    players = [PlayerState() for _ in range(4)]
+    players[0].hand = C("23455m12344678s")
+    players[0].hand[P("5s")] += 1
+    players[0].melds = [Meld("chow", tuple(parse("345p")), 3)]
+    players[0].discards = parse("9s")
+    players[1].discards = parse("3s3s3s")
+    players[2].discards = parse("6s6s6s9s9s9s")
+    state = GameState([0], players, phase=Phase.DISCARD)
+    assert not waits_worth_declaring(state, 0, P("1s"))
+    # 同一手牌，三種都還看不到別家打出：剩 3 + 3 + 3 = 9 張，照樣按
+    for player in players[1:]:
+        player.discards = []
+    players[0].discards = []
+    assert waits_worth_declaring(state, 0, P("1s"))

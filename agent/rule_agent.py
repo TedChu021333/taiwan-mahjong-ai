@@ -422,7 +422,8 @@ def should_fold(state: GameState, player: int, use_declared: bool = True,
 
 
 DECLARE_WIDE_KINDS = 3
-"""聽這麼多種牌以上一定宣告（使用者 10/20）。"""
+"""聽這麼多種牌以上，看不到的還剩 DECLARE_TWO_KINDS_LIVE 張以上就宣告（使用者 10/20 訂「一定按」，沒看剩幾張：
+11/20 18:28 聽三條、六條、九條三種，十二張全都看得到（自己、牌河、對家碰九條），一張都等不到還按聽、手牌鎖死）。"""
 DECLARE_TWO_KINDS_LIVE = 5
 """聽兩種牌時，看不到的還剩這麼多張以上就宣告（「聽得牌還剩蠻多張也可按」；最多 8 張）。"""
 DECLARE_SINGLE_LIVE = 3
@@ -459,8 +460,8 @@ def declare_is_worth(state: GameState, player: int, tile: int,
 
 
 def waits_worth_declaring(state: GameState, player: int, tile: int) -> bool:
-    """打出 tile 後聽牌時，照聽牌型態決定要不要宣告（使用者 10/20 的規則）：聽 DECLARE_WIDE_KINDS 種以上一定按；
-    聽兩種、看不到的還剩 DECLARE_TWO_KINDS_LIVE 張以上就按；只聽一種時，若摸某張牌能改成聽更多種就先不按
+    """打出 tile 後聽牌時，照聽牌型態決定要不要宣告（使用者 10/20 的規則）：聽兩種以上、
+    看不到的還剩 DECLARE_TWO_KINDS_LIVE 張以上就按（聽三種以上原本一定按，11/20 改成也要看剩幾張）；只聽一種時，若摸某張牌能改成聽更多種就先不按
     （保留換聽的機會），變不了的話剩 DECLARE_SINGLE_LIVE 張以上才按。
     10/22 曾改成「只聽一種剩 3 張以上就按」（沒按聽的局之後只有 4% 真的改成聽更多種），同日使用者要求改回。"""
     me = state.players[player]
@@ -471,9 +472,7 @@ def waits_worth_declaring(state: GameState, player: int, tile: int) -> bool:
         return False
     visible = visible_tile_counts(state, player)
     live = sum(max(0, 4 - visible[wait]) for wait in waits)
-    if len(waits) >= DECLARE_WIDE_KINDS:
-        return True
-    if len(waits) == 2:
+    if len(waits) >= 2:
         return live >= DECLARE_TWO_KINDS_LIVE
     return live >= DECLARE_SINGLE_LIVE and not wait_can_widen(after, me.open_melds, visible)
 
