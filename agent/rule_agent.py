@@ -424,8 +424,8 @@ def should_fold(state: GameState, player: int, use_declared: bool = True,
 DECLARE_WIDE_KINDS = 3
 """聽這麼多種牌以上，看不到的還剩 DECLARE_TWO_KINDS_LIVE 張以上就宣告（使用者 10/20 訂「一定按」，沒看剩幾張：
 11/20 18:28 聽三條、六條、九條三種，十二張全都看得到（自己、牌河、對家碰九條），一張都等不到還按聽、手牌鎖死）。"""
-DECLARE_TWO_KINDS_LIVE = 5
-"""聽兩種牌時，看不到的還剩這麼多張以上就宣告（「聽得牌還剩蠻多張也可按」；最多 8 張）。"""
+DECLARE_TWO_KINDS_LIVE = 4
+"""聽兩種以上時，看不到的還剩這麼多張以上就宣告（「聽得牌還剩蠻多張也可按」；10/20 訂 5，11/20 使用者改 4）。"""
 DECLARE_SINGLE_LIVE = 3
 """只聽一種、而且怎麼摸都變不成聽更多種時，還剩這麼多張以上才宣告。"""
 DECLARE_MIN_LIVE = None
