@@ -1,5 +1,9 @@
 train/*
 !train/.gitkeep
+!train/templates/
+!train/buttons/
+!train/river_templates/
+!train/meld_templates/
 __pycache__/
 *.py[cod]
 .pytest_cache/
